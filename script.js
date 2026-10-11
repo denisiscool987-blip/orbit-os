@@ -114,6 +114,24 @@
       o.stop(ctx.currentTime + (dur || 0.08) + 0.02);
     } catch (e) {}
   }
+  function saveHighScore(game, score) {
+    store = loadStore();
+    var hs = store.highScores || {};
+    var prev = hs[game] || 0;
+    if (score > prev) {
+      hs[game] = score;
+      saveStore({ highScores: hs });
+      store = loadStore();
+      showToast('New best ' + game + ': ' + score + '!');
+      sfx('success');
+      return true;
+    }
+    return false;
+  }
+  function getHighScore(game) {
+    store = loadStore();
+    return (store.highScores || {})[game] || 0;
+  }
   function sfx(n) {
     if (n === 'click') beep(800, 0.04, 'sine', 0.03);
     else if (n === 'open') beep(440, 0.06, 'triangle', 0.04);
@@ -771,13 +789,23 @@
       }
     },
     games: {
-      title: 'Games Arcade', icon: '🎮', width: 540, height: 460,
+      title: 'Games Arcade', icon: '🎮', width: 620, height: 520,
       content: function () {
         return '<div class="games-grid">' +
-          '<div class="game-card" data-game="nightshift"><div class="game-emoji">🔦</div><h4>Nightshift</h4><p>Pixel Palace · 5 nights</p></div>' +
+          '<div class="game-card" data-game="nightshift"><div class="game-emoji">🔦</div><h4>Nightshift</h4><p>Pixel Palace</p></div>' +
           '<div class="game-card" data-game="race"><div class="game-emoji">🏎️</div><h4>Orbit Race</h4><p>Top-down racing</p></div>' +
           '<div class="game-card" data-game="tetris"><div class="game-emoji">🧱</div><h4>Tetris</h4><p>Classic stack</p></div>' +
           '<div class="game-card" data-game="breakout"><div class="game-emoji">🔴</div><h4>Breakout</h4><p>Brick breaker</p></div>' +
+          '<div class="game-card" data-game="asteroids"><div class="game-emoji">☄️</div><h4>Asteroids</h4><p>Shoot rocks</p></div>' +
+          '<div class="game-card" data-game="flappy"><div class="game-emoji">🐦</div><h4>Orbit Bird</h4><p>Flap & dodge</p></div>' +
+          '<div class="game-card" data-game="invaders"><div class="game-emoji">👾</div><h4>Invaders</h4><p>Space shoot</p></div>' +
+          '<div class="game-card" data-game="whack"><div class="game-emoji">🔨</div><h4>Whack-a-Mole</h4><p>Tap fast</p></div>' +
+          '<div class="game-card" data-game="simon"><div class="game-emoji">🎵</div><h4>Simon</h4><p>Memory tones</p></div>' +
+          '<div class="game-card" data-game="catcher"><div class="game-emoji">🧺</div><h4>Star Catcher</h4><p>Catch stars</p></div>' +
+          '<div class="game-card" data-game="dodge"><div class="game-emoji">🚀</div><h4>Meteor Dodge</h4><p>Avoid debris</p></div>' +
+          '<div class="game-card" data-game="jumper"><div class="game-emoji">🦘</div><h4>Sky Jumper</h4><p>Endless jump</p></div>' +
+          '<div class="game-card" data-game="hockey"><div class="game-emoji">🏒</div><h4>Air Hockey</h4><p>Vs CPU</p></div>' +
+          '<div class="game-card" data-game="lights"><div class="game-emoji">💡</div><h4>Lights Out</h4><p>Puzzle grid</p></div>' +
           '<div class="game-card" data-game="snake"><div class="game-emoji">🐍</div><h4>Snake</h4><p>Classic + D-pad</p></div>' +
           '<div class="game-card" data-game="ttt"><div class="game-emoji">❌</div><h4>Tic-Tac-Toe</h4><p>Local play</p></div>' +
           '<div class="game-card" data-game="2048"><div class="game-emoji">🔢</div><h4>2048</h4><p>Swipe or arrows</p></div>' +
@@ -791,15 +819,15 @@
         win.el.querySelectorAll('.game-card').forEach(function (card) {
           card.addEventListener('click', function () {
             var g = card.dataset.game;
-            if (g === 'nightshift') openNightshift();
-            else if (g === 'race') openRace();
-            else if (g === 'tetris') openTetris();
-            else if (g === 'breakout') openBreakout();
-            else if (g === 'snake') openSnake(); else if (g === 'ttt') openTTT();
-            else if (g === '2048') open2048(); else if (g === 'memory') openMemory();
-            else if (g === 'mines') openMines(); else if (g === 'pong') openPong();
-            else if (g === 'c4') openConnectFour();
-            else if (g === 'solitaire') openSolitaire();
+            var map = {
+              nightshift: openNightshift, race: openRace, tetris: openTetris, breakout: openBreakout,
+              asteroids: openAsteroids, flappy: openFlappy, invaders: openInvaders, whack: openWhack,
+              simon: openSimon, catcher: openCatcher, dodge: openDodge, jumper: openJumper,
+              hockey: openHockey, lights: openLightsOut,
+              snake: openSnake, ttt: openTTT, '2048': open2048, memory: openMemory,
+              mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire
+            };
+            if (map[g]) map[g]();
           });
         });
       }
@@ -989,7 +1017,7 @@
           neofetch: function () {
             var p = getProfile();
             return p.avatar + '  ' + p.handle + '@orbit\n' +
-              'OS: OrbitOS 1.5.5 (browser)\n' +
+              'OS: OrbitOS 1.6.0 (browser)\n' +
               'Host: GitHub Pages\n' +
               'Uptime: ' + Math.floor(performance.now() / 1000) + 's\n' +
               'Shell: orbitsh\n' +
@@ -1332,7 +1360,7 @@
           '</select></div></div>' +
           '<div class="settings-section"><h3>Desktop</h3><div class="settings-row"><span>Floating sticky</span><button type="button" id="settings-sticky">Add sticky</button></div>' +
           '<div class="settings-row"><span>Apps</span><span style="color:var(--text-dim);font-size:0.8rem">Start menu only (◉)</span></div></div>' +
-          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.5.5</span></div>' +
+          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.0</span></div>' +
           '<div class="settings-row"><span>Restore session on boot</span><span style="color:var(--text-dim)">On</span></div>' +
           '<div class="settings-row"><span>Clear local data</span><button type="button" id="settings-clear">Clear</button></div></div></div>';
       },
@@ -1656,15 +1684,52 @@
         input.addEventListener('input', sync); sync();
       }
     },
+    stopwatch: {
+      title: 'Stopwatch', icon: '⏱️', width: 320, height: 280,
+      content: function () {
+        return '<div class="sw-body"><div class="sw-time" id="sw-time">00:00.00</div>' +
+          '<div class="sw-btns"><button type="button" id="sw-start">Start</button>' +
+          '<button type="button" id="sw-lap">Lap</button>' +
+          '<button type="button" id="sw-reset">Reset</button></div>' +
+          '<ul class="sw-laps" id="sw-laps"></ul></div>';
+      },
+      init: function (win) {
+        var running = false, t0 = 0, acc = 0, timer = null, laps = [];
+        function fmt(ms) {
+          var m = Math.floor(ms / 60000), s = Math.floor((ms % 60000) / 1000), cs = Math.floor((ms % 1000) / 10);
+          return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0') + '.' + String(cs).padStart(2,'0');
+        }
+        function tick() {
+          var now = running ? acc + (performance.now() - t0) : acc;
+          win.el.querySelector('#sw-time').textContent = fmt(now);
+        }
+        win.el.querySelector('#sw-start').addEventListener('click', function () {
+          if (!running) { running = true; t0 = performance.now(); this.textContent = 'Stop'; timer = setInterval(tick, 30); }
+          else { running = false; acc += performance.now() - t0; this.textContent = 'Start'; clearInterval(timer); }
+        });
+        win.el.querySelector('#sw-lap').addEventListener('click', function () {
+          var now = running ? acc + (performance.now() - t0) : acc;
+          if (now <= 0) return;
+          laps.unshift(fmt(now));
+          win.el.querySelector('#sw-laps').innerHTML = laps.slice(0, 8).map(function (l) { return '<li>' + l + '</li>'; }).join('');
+        });
+        win.el.querySelector('#sw-reset').addEventListener('click', function () {
+          running = false; acc = 0; clearInterval(timer);
+          win.el.querySelector('#sw-start').textContent = 'Start';
+          win.el.querySelector('#sw-time').textContent = '00:00.00';
+          laps = []; win.el.querySelector('#sw-laps').innerHTML = '';
+        });
+      }
+    },
     about: {
       title: 'About OrbitOS', icon: 'ℹ️', width: 460, height: 520,
       content: function () {
         return '<div class="about-body"><div class="about-logo">🚀</div><h2>OrbitOS</h2>' +
-          '<p class="version">Version 1.5.5 — Studio Pack</p>' +
+          '<p class="version">Version 1.6.0 — Arcade Pack</p>' +
           '<p>A complete desktop OS in pure HTML, CSS & JavaScript for GitHub Pages.</p>' +
           '<div class="about-features"><span>🪟 Windows</span><span>🎮 Games</span><span>🎵 Music</span><span>🤖 Assistant</span><span>🔦 Nightshift</span><span>🎨 Paint</span></div>' +
           '<div class="changelog"><h4>Changelog</h4><ul>' +
-          '<li><strong>1.5.5</strong> — Profile, Tetris, Breakout, Unix terminal; Panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
+          '<li><strong>1.6.0</strong> — +10 arcade games, high scores; Profile, Unix terminal, panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
           '<li><strong>1.5.0</strong> — Generative music studio, mobile polish</li>' +
           '<li><strong>1.4.x</strong> — Video, To-Do, Markdown, Solitaire, clipboard</li>' +
           '<li><strong>1.3–1.0</strong> — Themes, games, window manager, core apps</li></ul></div>' +
@@ -2603,6 +2668,481 @@
     }, 40);
   }
 
+
+  function openHighScores() {
+    store = loadStore();
+    var hs = store.highScores || {};
+    var names = Object.keys(hs);
+    var body = names.length
+      ? names.sort().map(function (k) { return '<div class="hs-row"><span>' + k + '</span><strong>' + hs[k] + '</strong></div>'; }).join('')
+      : '<p style="color:var(--text-dim);padding:12px">Play games to set high scores!</p>';
+    createWindow('highscores', 'High Scores', '🏆',
+      '<div class="hs-body"><h3 style="margin-bottom:10px">🏆 Best scores</h3>' + body +
+      '<button type="button" id="hs-clear" style="margin-top:12px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--danger);cursor:pointer">Clear scores</button></div>', 320, 400);
+    setTimeout(function () {
+      var w = windows.find(function (x) { return x.appId === 'highscores' && !x.closed; });
+      if (!w) return;
+      var btn = w.el.querySelector('#hs-clear');
+      if (btn) btn.addEventListener('click', function () {
+        saveStore({ highScores: {} }); store = loadStore();
+        showToast('High scores cleared'); closeWindow(w.id);
+      });
+    }, 50);
+  }
+
+  function openAsteroids() {
+    var win = createWindow('asteroids-game', 'Asteroids', '☄️',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="ast-score">0</strong> · Best <strong id="ast-best">0</strong></div>' +
+      '<canvas id="ast-canvas" width="420" height="360"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="ast-start">Start</button><span class="race-help">←→ turn · ↑ thrust · Space fire</span></div></div>', 460, 480);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#ast-canvas'), ctx = canvas.getContext('2d');
+      var W = 420, H = 360, score = 0, running = false, raf, keys = {};
+      var ship, rocks, bullets;
+      win.el.querySelector('#ast-best').textContent = getHighScore('asteroids');
+      function reset() {
+        ship = { x: W/2, y: H/2, a: 0, vx: 0, vy: 0 };
+        rocks = []; bullets = []; score = 0;
+        for (var i = 0; i < 5; i++) rocks.push(mkRock(30 + Math.random()*20));
+        win.el.querySelector('#ast-score').textContent = '0';
+      }
+      function mkRock(r) {
+        return { x: Math.random()*W, y: Math.random()*H, r: r, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 };
+      }
+      function frame() {
+        if (!running) return;
+        if (keys['ArrowLeft']) ship.a -= 0.08;
+        if (keys['ArrowRight']) ship.a += 0.08;
+        if (keys['ArrowUp']) { ship.vx += Math.cos(ship.a)*0.15; ship.vy += Math.sin(ship.a)*0.15; }
+        ship.vx *= 0.99; ship.vy *= 0.99;
+        ship.x = (ship.x + ship.vx + W) % W; ship.y = (ship.y + ship.vy + H) % H;
+        if (keys[' ']) {
+          if (!ship._cd || ship._cd <= 0) {
+            bullets.push({ x: ship.x, y: ship.y, vx: Math.cos(ship.a)*6, vy: Math.sin(ship.a)*6, life: 50 });
+            ship._cd = 12; sfx('click');
+          }
+        }
+        if (ship._cd > 0) ship._cd--;
+        bullets.forEach(function (b) { b.x += b.vx; b.y += b.vy; b.life--; });
+        bullets = bullets.filter(function (b) { return b.life > 0; });
+        rocks.forEach(function (r) {
+          r.x = (r.x + r.vx + W) % W; r.y = (r.y + r.vy + H) % H;
+          var dx = r.x - ship.x, dy = r.y - ship.y;
+          if (dx*dx+dy*dy < (r.r+8)*(r.r+8)) {
+            running = false; saveHighScore('asteroids', score);
+            showToast('Crashed! Score ' + score); return;
+          }
+        });
+        for (var i = rocks.length-1; i >= 0; i--) {
+          var r = rocks[i];
+          for (var j = bullets.length-1; j >= 0; j--) {
+            var b = bullets[j];
+            var dx = r.x - b.x, dy = r.y - b.y;
+            if (dx*dx+dy*dy < r.r*r.r) {
+              bullets.splice(j,1); rocks.splice(i,1); score += Math.floor(40-r.r);
+              win.el.querySelector('#ast-score').textContent = score;
+              if (r.r > 16) {
+                rocks.push({ x: r.x, y: r.y, r: r.r/2, vx: r.vx+1, vy: r.vy });
+                rocks.push({ x: r.x, y: r.y, r: r.r/2, vx: r.vx-1, vy: r.vy });
+              }
+              if (!rocks.length) { for (var k=0;k<4;k++) rocks.push(mkRock(28)); }
+              break;
+            }
+          }
+        }
+        ctx.fillStyle = '#050510'; ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle = '#00d4ff'; ctx.beginPath();
+        ctx.moveTo(ship.x+Math.cos(ship.a)*12, ship.y+Math.sin(ship.a)*12);
+        ctx.lineTo(ship.x+Math.cos(ship.a+2.5)*10, ship.y+Math.sin(ship.a+2.5)*10);
+        ctx.lineTo(ship.x+Math.cos(ship.a-2.5)*10, ship.y+Math.sin(ship.a-2.5)*10);
+        ctx.closePath(); ctx.stroke();
+        ctx.fillStyle = '#ffe066'; bullets.forEach(function(b){ ctx.fillRect(b.x-1,b.y-1,3,3); });
+        ctx.strokeStyle = '#aaa'; rocks.forEach(function(r){ ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke(); });
+        raf = requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#ast-start').addEventListener('click', function () {
+        reset(); running = true; if (raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+      });
+      document.addEventListener('keydown', function (e) { keys[e.key] = true; if (e.key===' ') e.preventDefault(); });
+      document.addEventListener('keyup', function (e) { keys[e.key] = false; });
+    }, 40);
+  }
+
+  function openFlappy() {
+    var win = createWindow('flappy-game', 'Orbit Bird', '🐦',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="fl-score">0</strong> · Best <strong id="fl-best">0</strong></div>' +
+      '<canvas id="fl-canvas" width="320" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="fl-start">Start</button><span class="race-help">Space / click to flap</span></div></div>', 360, 520);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#fl-canvas'), ctx = canvas.getContext('2d');
+      var W=320,H=400, bird, pipes, score, running, raf, grav=0.35;
+      win.el.querySelector('#fl-best').textContent = getHighScore('flappy');
+      function reset() {
+        bird = { x: 70, y: H/2, vy: 0 }; pipes = []; score = 0; running = true;
+        win.el.querySelector('#fl-score').textContent = '0';
+        for (var i=0;i<3;i++) pipes.push({ x: 200+i*160, gap: 80+Math.random()*120, open: 90 });
+      }
+      function frame() {
+        if (!running) return;
+        bird.vy += grav; bird.y += bird.vy;
+        pipes.forEach(function (p) {
+          p.x -= 2.2;
+          if (p.x < -40) { p.x = W+40; p.gap = 60+Math.random()*160; score++; win.el.querySelector('#fl-score').textContent = score; }
+          if (bird.x+12>p.x && bird.x-12<p.x+40) {
+            if (bird.y-10 < p.gap || bird.y+10 > p.gap+p.open) { end(); }
+          }
+        });
+        if (bird.y > H-10 || bird.y < 0) end();
+        ctx.fillStyle = '#87ceeb'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = '#2d8f2d';
+        pipes.forEach(function (p) {
+          ctx.fillRect(p.x, 0, 40, p.gap);
+          ctx.fillRect(p.x, p.gap+p.open, 40, H);
+        });
+        ctx.fillStyle = '#f4c430'; ctx.beginPath(); ctx.arc(bird.x, bird.y, 12, 0, Math.PI*2); ctx.fill();
+        raf = requestAnimationFrame(frame);
+      }
+      function end() {
+        running = false; saveHighScore('flappy', score); showToast('Score ' + score);
+      }
+      function flap() { if (running) bird.vy = -6; }
+      win.el.querySelector('#fl-start').addEventListener('click', function () {
+        reset(); if (raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+      });
+      canvas.addEventListener('mousedown', flap);
+      document.addEventListener('keydown', function (e) { if (e.key===' ' || e.key==='ArrowUp') { e.preventDefault(); flap(); } });
+    }, 40);
+  }
+
+  function openInvaders() {
+    var win = createWindow('invaders-game', 'Invaders', '👾',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="inv-score">0</strong> · Best <strong id="inv-best">0</strong></div>' +
+      '<canvas id="inv-canvas" width="400" height="360"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="inv-start">Start</button><span class="race-help">←→ move · Space fire</span></div></div>', 440, 480);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#inv-canvas'), ctx = canvas.getContext('2d');
+      var W=400,H=360, player, aliens, bullets, score, running, raf, keys={}, dir=1, tick=0;
+      win.el.querySelector('#inv-best').textContent = getHighScore('invaders');
+      function reset() {
+        player = { x: W/2-20, y: H-30 }; bullets = []; score = 0; dir = 1; tick = 0; running = true;
+        aliens = [];
+        for (var r=0;r<4;r++) for (var c=0;c<8;c++) aliens.push({ x: 40+c*40, y: 30+r*28, alive: true });
+        win.el.querySelector('#inv-score').textContent = '0';
+      }
+      function frame() {
+        if (!running) return;
+        tick++;
+        if (keys['ArrowLeft']) player.x = Math.max(0, player.x-4);
+        if (keys['ArrowRight']) player.x = Math.min(W-40, player.x+4);
+        if (keys[' '] && (!player.cd || player.cd<=0)) {
+          bullets.push({ x: player.x+20, y: player.y, vy: -6 }); player.cd = 18; sfx('click');
+        }
+        if (player.cd>0) player.cd--;
+        bullets.forEach(function(b){ b.y += b.vy; });
+        bullets = bullets.filter(function(b){ return b.y > 0; });
+        if (tick % 30 === 0) {
+          var edge = false;
+          aliens.forEach(function(a){ if (!a.alive) return; if (a.x<10||a.x>W-30) edge=true; });
+          if (edge) { dir *= -1; aliens.forEach(function(a){ a.y += 12; }); }
+          aliens.forEach(function(a){ if (a.alive) a.x += dir*8; });
+        }
+        aliens.forEach(function(a){
+          if (!a.alive) return;
+          if (a.y > player.y-10) { running=false; saveHighScore('invaders', score); showToast('Invaded! '+score); }
+          bullets.forEach(function(b, bi){
+            if (b.x>a.x && b.x<a.x+24 && b.y>a.y && b.y<a.y+18) {
+              a.alive=false; bullets.splice(bi,1); score+=10;
+              win.el.querySelector('#inv-score').textContent = score; sfx('success');
+            }
+          });
+        });
+        if (aliens.every(function(a){ return !a.alive; })) {
+          score += 100; for (var r=0;r<4;r++) for (var c=0;c<8;c++) aliens.push({ x:40+c*40,y:30+r*28,alive:true });
+        }
+        ctx.fillStyle='#0a0a14'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#00d4ff'; ctx.fillRect(player.x, player.y, 40, 12);
+        ctx.fillStyle='#4ade80'; aliens.forEach(function(a){ if(a.alive) ctx.fillRect(a.x,a.y,24,16); });
+        ctx.fillStyle='#ffe066'; bullets.forEach(function(b){ ctx.fillRect(b.x-1,b.y,3,8); });
+        raf = requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#inv-start').addEventListener('click', function(){ reset(); if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(frame); });
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key===' ')e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openWhack() {
+    var win = createWindow('whack-game', 'Whack-a-Mole', '🔨',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="wh-score">0</strong> · Time <strong id="wh-time">30</strong></div>' +
+      '<div class="whack-grid" id="wh-grid"></div>' +
+      '<div class="game-btn-row"><button type="button" id="wh-start">Start</button></div></div>', 360, 420);
+    setTimeout(function () {
+      var grid = win.el.querySelector('#wh-grid'), score=0, time=30, timer, moleTimer, active=-1;
+      for (var i=0;i<9;i++) {
+        var h = document.createElement('button'); h.type='button'; h.className='whack-hole'; h.dataset.i=i;
+        h.addEventListener('click', function(){
+          if (+this.dataset.i === active) { score++; active=-1; this.classList.remove('up'); win.el.querySelector('#wh-score').textContent=score; sfx('click'); }
+        });
+        grid.appendChild(h);
+      }
+      function showMole() {
+        grid.querySelectorAll('.whack-hole').forEach(function(h){ h.classList.remove('up'); });
+        active = (Math.random()*9)|0;
+        grid.querySelectorAll('.whack-hole')[active].classList.add('up');
+      }
+      win.el.querySelector('#wh-start').addEventListener('click', function(){
+        score=0; time=30; win.el.querySelector('#wh-score').textContent='0'; win.el.querySelector('#wh-time').textContent='30';
+        clearInterval(timer); clearInterval(moleTimer);
+        showMole(); moleTimer=setInterval(showMole, 700);
+        timer=setInterval(function(){
+          time--; win.el.querySelector('#wh-time').textContent=time;
+          if (time<=0) { clearInterval(timer); clearInterval(moleTimer); active=-1;
+            grid.querySelectorAll('.whack-hole').forEach(function(h){ h.classList.remove('up'); });
+            saveHighScore('whack', score); showToast('Time! Score '+score); }
+        }, 1000);
+      });
+    }, 40);
+  }
+
+  function openSimon() {
+    var win = createWindow('simon-game', 'Simon', '🎵',
+      '<div class="ag-body"><div class="tetris-hud">Level <strong id="si-level">0</strong> · Best <strong id="si-best">0</strong></div>' +
+      '<div class="simon-pad" id="si-pad">' +
+      '<button type="button" class="si-btn" data-i="0" style="background:#ef4444"></button>' +
+      '<button type="button" class="si-btn" data-i="1" style="background:#22c55e"></button>' +
+      '<button type="button" class="si-btn" data-i="2" style="background:#3b82f6"></button>' +
+      '<button type="button" class="si-btn" data-i="3" style="background:#eab308"></button></div>' +
+      '<div class="game-btn-row"><button type="button" id="si-start">Start</button></div></div>', 320, 400);
+    setTimeout(function () {
+      var seq=[], input=[], playing=false, level=0;
+      win.el.querySelector('#si-best').textContent = getHighScore('simon');
+      var btns = win.el.querySelectorAll('.si-btn');
+      var freqs = [330, 370, 415, 277];
+      function flash(i) {
+        btns[i].classList.add('lit');
+        try { var ctx=ensureAudio(); if(ctx){ var o=ctx.createOscillator(),g=ctx.createGain(); o.frequency.value=freqs[i]; g.gain.value=0.08; o.connect(g); g.connect(ctx.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25); o.stop(ctx.currentTime+0.3);} } catch(e){}
+        setTimeout(function(){ btns[i].classList.remove('lit'); }, 280);
+      }
+      function playSeq() {
+        playing=true; input=[]; var i=0;
+        var t = setInterval(function(){
+          flash(seq[i]); i++;
+          if (i>=seq.length) { clearInterval(t); playing=false; }
+        }, 500);
+      }
+      function next() {
+        seq.push((Math.random()*4)|0); level=seq.length;
+        win.el.querySelector('#si-level').textContent=level; playSeq();
+      }
+      btns.forEach(function(b){
+        b.addEventListener('click', function(){
+          if (playing) return;
+          var i=+b.dataset.i; flash(i); input.push(i);
+          if (input[input.length-1] !== seq[input.length-1]) {
+            saveHighScore('simon', level); showToast('Wrong! Level '+level); seq=[]; input=[]; level=0;
+            win.el.querySelector('#si-level').textContent='0'; return;
+          }
+          if (input.length===seq.length) setTimeout(next, 600);
+        });
+      });
+      win.el.querySelector('#si-start').addEventListener('click', function(){ seq=[]; next(); });
+    }, 40);
+  }
+
+  function openCatcher() {
+    var win = createWindow('catcher-game', 'Star Catcher', '🧺',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="ca-score">0</strong> · Best <strong id="ca-best">0</strong></div>' +
+      '<canvas id="ca-canvas" width="360" height="320"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="ca-start">Start</button><span class="race-help">←→ move basket</span></div></div>', 400, 440);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#ca-canvas'), ctx = canvas.getContext('2d');
+      var W=360,H=320, basket, stars, score, running, raf, keys={};
+      win.el.querySelector('#ca-best').textContent = getHighScore('catcher');
+      function reset() {
+        basket={x:W/2-30,y:H-28,w:60}; stars=[]; score=0; running=true;
+        win.el.querySelector('#ca-score').textContent='0';
+      }
+      function frame() {
+        if (!running) return;
+        if (keys['ArrowLeft']||keys['a']) basket.x=Math.max(0,basket.x-5);
+        if (keys['ArrowRight']||keys['d']) basket.x=Math.min(W-basket.w,basket.x+5);
+        if (Math.random()<0.04) stars.push({x:Math.random()*(W-16),y:0,vy:2+Math.random()*2});
+        stars.forEach(function(s){ s.y+=s.vy; });
+        for (var i=stars.length-1;i>=0;i--) {
+          var s=stars[i];
+          if (s.y>H) { stars.splice(i,1); continue; }
+          if (s.y>basket.y-8 && s.x>basket.x && s.x<basket.x+basket.w) {
+            stars.splice(i,1); score++; win.el.querySelector('#ca-score').textContent=score; sfx('click');
+          }
+        }
+        if (score>0 && score%20===0 && stars.length>15) { /* keep going */ }
+        ctx.fillStyle='#0b1020'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#00d4ff'; ctx.fillRect(basket.x,basket.y,basket.w,14);
+        ctx.fillStyle='#ffe066'; stars.forEach(function(s){ ctx.beginPath(); ctx.arc(s.x,s.y,6,0,Math.PI*2); ctx.fill(); });
+        raf=requestAnimationFrame(frame);
+      }
+      // auto end after 45s
+      win.el.querySelector('#ca-start').addEventListener('click', function(){
+        reset(); if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+        setTimeout(function(){ if(running){ running=false; saveHighScore('catcher',score); showToast('Time! '+score); }}, 45000);
+      });
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+      canvas.addEventListener('mousemove', function(e){
+        var r=canvas.getBoundingClientRect();
+        basket.x=Math.max(0,Math.min(W-basket.w, e.clientX-r.left-basket.w/2));
+      });
+    }, 40);
+  }
+
+  function openDodge() {
+    var win = createWindow('dodge-game', 'Meteor Dodge', '🚀',
+      '<div class="ag-body"><div class="tetris-hud">Score <strong id="dg-score">0</strong> · Best <strong id="dg-best">0</strong></div>' +
+      '<canvas id="dg-canvas" width="360" height="320"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="dg-start">Start</button><span class="race-help">←→ dodge meteors</span></div></div>', 400, 440);
+    setTimeout(function () {
+      var canvas=win.el.querySelector('#dg-canvas'), ctx=canvas.getContext('2d');
+      var W=360,H=320, ship, mets, score, running, raf, keys={}, t0;
+      win.el.querySelector('#dg-best').textContent=getHighScore('dodge');
+      function reset(){ ship={x:W/2,y:H-40}; mets=[]; score=0; running=true; t0=performance.now(); win.el.querySelector('#dg-score').textContent='0'; }
+      function frame(now){
+        if(!running)return;
+        score=Math.floor((now-t0)/100); win.el.querySelector('#dg-score').textContent=score;
+        if(keys['ArrowLeft']||keys['a']) ship.x=Math.max(15,ship.x-5);
+        if(keys['ArrowRight']||keys['d']) ship.x=Math.min(W-15,ship.x+5);
+        if(Math.random()<0.06+score/5000) mets.push({x:Math.random()*W,y:-10,vy:2+Math.random()*3,r:8+Math.random()*10});
+        mets.forEach(function(m){ m.y+=m.vy; });
+        mets=mets.filter(function(m){ return m.y<H+20; });
+        for(var i=0;i<mets.length;i++){
+          var m=mets[i], dx=m.x-ship.x, dy=m.y-ship.y;
+          if(dx*dx+dy*dy<(m.r+10)*(m.r+10)){ running=false; saveHighScore('dodge',score); showToast('Hit! '+score); return; }
+        }
+        ctx.fillStyle='#050510'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.moveTo(ship.x,ship.y-12); ctx.lineTo(ship.x-10,ship.y+10); ctx.lineTo(ship.x+10,ship.y+10); ctx.fill();
+        ctx.fillStyle='#fb923c'; mets.forEach(function(m){ ctx.beginPath(); ctx.arc(m.x,m.y,m.r,0,Math.PI*2); ctx.fill(); });
+        raf=requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#dg-start').addEventListener('click', function(){ reset(); if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(frame); });
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openJumper() {
+    var win = createWindow('jumper-game', 'Sky Jumper', '🦘',
+      '<div class="ag-body"><div class="tetris-hud">Height <strong id="jp-score">0</strong> · Best <strong id="jp-best">0</strong></div>' +
+      '<canvas id="jp-canvas" width="320" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="jp-start">Start</button><span class="race-help">←→ move · bounce up</span></div></div>', 360, 520);
+    setTimeout(function () {
+      var canvas=win.el.querySelector('#jp-canvas'), ctx=canvas.getContext('2d');
+      var W=320,H=400, player, plats, score, running, raf, keys={}, cam=0;
+      win.el.querySelector('#jp-best').textContent=getHighScore('jumper');
+      function reset(){
+        player={x:W/2,y:H-60,vy:0}; plats=[]; score=0; cam=0; running=true;
+        for(var i=0;i<8;i++) plats.push({x:Math.random()*(W-50),y:H-i*50,w:50});
+        plats[0]={x:W/2-25,y:H-40,w:50};
+        win.el.querySelector('#jp-score').textContent='0';
+      }
+      function frame(){
+        if(!running)return;
+        if(keys['ArrowLeft']||keys['a']) player.x-=4;
+        if(keys['ArrowRight']||keys['d']) player.x+=4;
+        if(player.x<0) player.x=W; if(player.x>W) player.x=0;
+        player.vy+=0.25; player.y+=player.vy;
+        plats.forEach(function(p){
+          if(player.vy>0 && player.y+10>p.y && player.y+10<p.y+12 && player.x>p.x && player.x<p.x+p.w){
+            player.vy=-8; sfx('click');
+          }
+        });
+        if(player.y < H*0.4){ var dy=H*0.4-player.y; cam+=dy; player.y+=dy; plats.forEach(function(p){ p.y+=dy; }); score=Math.floor(cam/10); win.el.querySelector('#jp-score').textContent=score; }
+        plats = plats.filter(function(p){ return p.y < H+20; });
+        while(plats.length<8){
+          var top=Math.min.apply(null, plats.map(function(p){return p.y;}));
+          plats.push({x:Math.random()*(W-50), y:top-50-Math.random()*20, w:40+Math.random()*30});
+        }
+        if(player.y>H){ running=false; saveHighScore('jumper',score); showToast('Fell! '+score); return; }
+        ctx.fillStyle='#1a0a2e'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#4ade80'; plats.forEach(function(p){ ctx.fillRect(p.x,p.y,p.w,8); });
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(player.x,player.y,10,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#jp-start').addEventListener('click', function(){ reset(); if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(frame); });
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openHockey() {
+    var win = createWindow('hockey-game', 'Air Hockey', '🏒',
+      '<div class="ag-body"><div class="tetris-hud">You <strong id="hk-p1">0</strong> · CPU <strong id="hk-p2">0</strong></div>' +
+      '<canvas id="hk-canvas" width="400" height="280"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="hk-start">Start</button><span class="race-help">Mouse / ←→ move paddle</span></div></div>', 440, 400);
+    setTimeout(function () {
+      var canvas=win.el.querySelector('#hk-canvas'), ctx=canvas.getContext('2d');
+      var W=400,H=280, p1, p2, puck, s1=0, s2=0, running=false, raf, keys={};
+      function resetPuck(){ puck={x:W/2,y:H/2,vx:(Math.random()>0.5?3:-3),vy:(Math.random()-0.5)*2}; }
+      function reset(){ p1={x:30,y:H/2-25}; p2={x:W-40,y:H/2-25}; resetPuck(); running=true; }
+      function frame(){
+        if(!running)return;
+        if(keys['ArrowUp']||keys['w']) p1.y=Math.max(0,p1.y-5);
+        if(keys['ArrowDown']||keys['s']) p1.y=Math.min(H-50,p1.y+5);
+        // CPU
+        var ty=puck.y-25; p2.y += (ty-p2.y)*0.08; p2.y=Math.max(0,Math.min(H-50,p2.y));
+        puck.x+=puck.vx; puck.y+=puck.vy;
+        if(puck.y<8||puck.y>H-8) puck.vy*=-1;
+        if(puck.x< p1.x+14 && puck.x>p1.x && puck.y>p1.y && puck.y<p1.y+50){ puck.vx=Math.abs(puck.vx)+0.2; puck.vy+=(puck.y-(p1.y+25))*0.1; }
+        if(puck.x> p2.x-4 && puck.x<p2.x+14 && puck.y>p2.y && puck.y<p2.y+50){ puck.vx=-Math.abs(puck.vx)-0.2; puck.vy+=(puck.y-(p2.y+25))*0.1; }
+        if(puck.x<0){ s2++; win.el.querySelector('#hk-p2').textContent=s2; resetPuck(); sfx('error'); if(s2>=7){ running=false; showToast('CPU wins'); } }
+        if(puck.x>W){ s1++; win.el.querySelector('#hk-p1').textContent=s1; resetPuck(); sfx('success'); if(s1>=7){ running=false; showToast('You win!'); saveHighScore('hockey',s1); } }
+        ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle='#334'; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+        ctx.fillStyle='#00d4ff'; ctx.fillRect(p1.x,p1.y,12,50);
+        ctx.fillStyle='#ff4466'; ctx.fillRect(p2.x,p2.y,12,50);
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(puck.x,puck.y,8,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#hk-start').addEventListener('click', function(){ s1=s2=0; win.el.querySelector('#hk-p1').textContent='0'; win.el.querySelector('#hk-p2').textContent='0'; reset(); if(raf)cancelAnimationFrame(raf); raf=requestAnimationFrame(frame); });
+      canvas.addEventListener('mousemove', function(e){ var r=canvas.getBoundingClientRect(); p1.y=Math.max(0,Math.min(H-50,e.clientY-r.top-25)); });
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openLightsOut() {
+    var win = createWindow('lights-game', 'Lights Out', '💡',
+      '<div class="ag-body"><div class="tetris-hud">Moves <strong id="lo-moves">0</strong></div>' +
+      '<div class="lo-grid" id="lo-grid"></div>' +
+      '<div class="game-btn-row"><button type="button" id="lo-new">New Puzzle</button></div></div>', 320, 400);
+    setTimeout(function () {
+      var N=5, grid=[], moves=0;
+      function idx(r,c){ return r*N+c; }
+      function toggle(r,c){
+        [[0,0],[0,1],[0,-1],[1,0],[-1,0]].forEach(function(d){
+          var rr=r+d[0], cc=c+d[1];
+          if(rr>=0&&rr<N&&cc>=0&&cc<N) grid[idx(rr,cc)] ^= 1;
+        });
+      }
+      function render(){
+        var el=win.el.querySelector('#lo-grid'); el.innerHTML='';
+        for(var r=0;r<N;r++) for(var c=0;c<N;c++){
+          var b=document.createElement('button'); b.type='button'; b.className='lo-cell'+(grid[idx(r,c)]?' on':'');
+          (function(r,c){ b.addEventListener('click', function(){
+            toggle(r,c); moves++; win.el.querySelector('#lo-moves').textContent=moves; render();
+            if(grid.every(function(x){return !x;})){ saveHighScore('lights', Math.max(0,100-moves)); showToast('Solved in '+moves+'!'); sfx('success'); }
+          }); })(r,c);
+          el.appendChild(b);
+        }
+      }
+      function newPuzzle(){
+        grid=[]; for(var i=0;i<N*N;i++) grid[i]=0;
+        for(var k=0;k<12;k++) toggle((Math.random()*N)|0,(Math.random()*N)|0);
+        moves=0; win.el.querySelector('#lo-moves').textContent='0'; render();
+      }
+      win.el.querySelector('#lo-new').addEventListener('click', newPuzzle);
+      newPuzzle();
+    }, 40);
+  }
+
   function openSnake() {
     const win = createWindow('snake-game', 'Snake', '🐍',
       '<div class="snake-container"><div class="snake-hud"><span>Score: <strong id="snake-score">0</strong></span><span>Best: <strong id="snake-best">0</strong></span></div>' +
@@ -3000,7 +3540,7 @@
     var map = {
       browser: 'browser', proxy: 'browser', music: 'music', games: 'games', game: 'games',
       terminal: 'terminal', shell: 'terminal', notepad: 'notepad', calc: 'calculator', calculator: 'calculator',
-      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', help: 'assistant',
+      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', stopwatch: 'stopwatch', timer: 'stopwatch', help: 'assistant',
       stickies: 'stickies', sticky: 'stickies', notes: 'stickies', tasks: 'taskmgr', taskmgr: 'taskmgr',
       task: 'taskmgr', weather: 'weather', video: 'video', todo: 'todo', markdown: 'markdown', snake: 'games', pong: 'games', mines: 'games', c4: 'games', connect: 'games'
     };
@@ -3155,9 +3695,21 @@
     { id: 'race', icon: '🏎️', label: 'Play Orbit Race', type: 'game', fn: function () { openRace(); } },
     { id: 'tetris', icon: '🧱', label: 'Play Tetris', type: 'game', fn: function () { openTetris(); } },
     { id: 'breakout', icon: '🔴', label: 'Play Breakout', type: 'game', fn: function () { openBreakout(); } },
+    { id: 'asteroids', icon: '☄️', label: 'Play Asteroids', type: 'game', fn: function () { openAsteroids(); } },
+    { id: 'flappy', icon: '🐦', label: 'Play Orbit Bird', type: 'game', fn: function () { openFlappy(); } },
+    { id: 'invaders', icon: '👾', label: 'Play Invaders', type: 'game', fn: function () { openInvaders(); } },
+    { id: 'whack', icon: '🔨', label: 'Play Whack-a-Mole', type: 'game', fn: function () { openWhack(); } },
+    { id: 'simon', icon: '🎵', label: 'Play Simon', type: 'game', fn: function () { openSimon(); } },
+    { id: 'catcher', icon: '🧺', label: 'Play Star Catcher', type: 'game', fn: function () { openCatcher(); } },
+    { id: 'dodge', icon: '🚀', label: 'Play Meteor Dodge', type: 'game', fn: function () { openDodge(); } },
+    { id: 'jumper', icon: '🦘', label: 'Play Sky Jumper', type: 'game', fn: function () { openJumper(); } },
+    { id: 'hockey', icon: '🏒', label: 'Play Air Hockey', type: 'game', fn: function () { openHockey(); } },
+    { id: 'lights', icon: '💡', label: 'Play Lights Out', type: 'game', fn: function () { openLightsOut(); } },
+    { id: 'scores', icon: '🏆', label: 'High Scores', type: 'action', fn: function () { openHighScores(); } },
     { id: 'assistant', icon: '🤖', label: 'Orbit Assistant', type: 'app', fn: function () { openApp('assistant'); } },
     { id: 'clockapp', icon: '🕐', label: 'Clock', type: 'app', fn: function () { openApp('clockapp'); } },
     { id: 'gallery', icon: '🖼️', label: 'Gallery', type: 'app', fn: function () { openApp('gallery'); } },
+    { id: 'stopwatch', icon: '⏱️', label: 'Stopwatch', type: 'app', fn: function () { openApp('stopwatch'); } },
     { id: 'sticky', icon: '📌', label: 'Add desktop sticky', type: 'action', fn: function () { addFloatSticky(); } },
     { id: 'run', icon: '▷', label: 'Run dialog', type: 'action', fn: function () { openRunDialog(); } },
     { id: 'lock', icon: '🔒', label: 'Lock screen', type: 'action', fn: function () { lockScreen(); } },

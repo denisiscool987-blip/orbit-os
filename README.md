@@ -1,27 +1,23 @@
-# OrbitOS v1.5.5
+# OrbitOS v1.6.0 — Arcade Pack
 
-Browser desktop OS for GitHub Pages. No install · no backend · localStorage only.  
-Works in Chrome, Firefox, Safari, Edge (no PWA required).
+Browser desktop OS for GitHub Pages. No backend · localStorage only.  
+Chrome · Firefox · Safari · Edge (no PWA).
 
-## Profile
-**Settings → Profile** — display name, handle, avatar (shown in Start menu).
+## Games (22+)
+Nightshift · Orbit Race · Tetris · Breakout · **Asteroids** · **Orbit Bird** · **Invaders** · **Whack-a-Mole** · **Simon** · **Star Catcher** · **Meteor Dodge** · **Sky Jumper** · **Air Hockey** · **Lights Out** · Snake · 2048 · Memory · Minesweeper · Pong · Connect Four · Solitaire · Tic-Tac-Toe
 
-## Terminal (Unix-style)
-`help` · `man` · `ls -la` · `cat` · `head`/`tail` · `wc` · `touch` · `rm` · `mv` · `cp` · `grep` · `find` · `df` · `free` · `uptime` · `ps` · `kill` · `env` · `neofetch` · `fortune` · …
+**High Scores** — saved per game (Ctrl+K → High Scores)
 
-Virtual files persist in localStorage.
-
-## Games
-Nightshift · **Orbit Race** · **Tetris** · **Breakout** · Snake · 2048 · Memory · Minesweeper · Pong · Connect Four · Solitaire · Tic-Tac-Toe
-
-## System
-- Start menu only (clean desktop)
-- Settings → Tab disguise (tab title/icon only)
-- Panic key: **`** closes the tab
-- Ctrl+K palette · Ctrl+R Run · Ctrl+L lock
+## Features
+- Local **Profile** (Settings)
+- **Tab disguise** (Settings)
+- Panic key **`** closes tab
+- Unix-style **Terminal**
+- **Stopwatch** app
+- Generative music · Assistant · clean Start-menu desktop
 
 ## Deploy
-Upload `index.html`, `styles.css`, `script.js` to repo root → GitHub Pages.
+`index.html` · `styles.css` · `script.js` → repo root → GitHub Pages
 
 ## License
 MIT
