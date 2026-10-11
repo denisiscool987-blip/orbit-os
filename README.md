@@ -1,21 +1,27 @@
-# OrbitOS
+# OrbitOS v1.5.5
 
-Browser desktop OS for GitHub Pages. **v1.5.4 Studio Pack.**
+Browser desktop OS for GitHub Pages. No install · no backend · localStorage only.  
+Works in Chrome, Firefox, Safari, Edge (no PWA required).
 
-## Apps (Start menu ◉ only)
-Browser · Music · Games · Terminal · Notepad · Calculator · Paint · Files · Stickies · Tasks · Weather · Video · To-Do · Markdown · Assistant · Clock · Gallery · Settings · About
+## Profile
+**Settings → Profile** — display name, handle, avatar (shown in Start menu).
+
+## Terminal (Unix-style)
+`help` · `man` · `ls -la` · `cat` · `head`/`tail` · `wc` · `touch` · `rm` · `mv` · `cp` · `grep` · `find` · `df` · `free` · `uptime` · `ps` · `kill` · `env` · `neofetch` · `fortune` · …
+
+Virtual files persist in localStorage.
 
 ## Games
-**Orbit Race** (top-down oval, 3 laps) · **Nightshift** · Snake · 2048 · Memory · Minesweeper · Pong · Connect Four · Solitaire · Tic-Tac-Toe
+Nightshift · **Orbit Race** · **Tetris** · **Breakout** · Snake · 2048 · Memory · Minesweeper · Pong · Connect Four · Solitaire · Tic-Tac-Toe
 
-## Panic key
-Press **`** (backtick, key above Tab) to **instantly close the tab**.
-
-## Tab disguise
-**Settings → Tab disguise** — tab title/favicon only (Google, Docs, Drive, etc.). You stay on OrbitOS.
+## System
+- Start menu only (clean desktop)
+- Settings → Tab disguise (tab title/icon only)
+- Panic key: **`** closes the tab
+- Ctrl+K palette · Ctrl+R Run · Ctrl+L lock
 
 ## Deploy
-`index.html` · `styles.css` · `script.js` → repo root → GitHub Pages
+Upload `index.html`, `styles.css`, `script.js` to repo root → GitHub Pages.
 
 ## License
 MIT

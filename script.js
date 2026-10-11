@@ -66,10 +66,43 @@
 
 
   function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    } catch (e) { return null; }
   }
+  function safeFullscreenToggle() {
+    var doc = document;
+    var el = document.documentElement;
+    try {
+      if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (req) req.call(el);
+      } else {
+        var exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+        if (exit) exit.call(doc);
+      }
+    } catch (e) { showToast('Fullscreen not available'); }
+  }
+  function getProfile() {
+    store = loadStore();
+    return {
+      name: store.profileName || 'Orbit User',
+      avatar: store.profileAvatar || '🚀',
+      handle: store.profileHandle || 'orbit'
+    };
+  }
+  function applyProfileUI() {
+    var p = getProfile();
+    var av = document.querySelector('.user-avatar');
+    var strong = document.querySelector('.user-info strong');
+    var span = document.querySelector('.user-info span');
+    if (av) av.textContent = p.avatar;
+    if (strong) strong.textContent = p.name;
+    if (span) span.textContent = '@' + p.handle + ' · local profile';
+  }
+
   function beep(freq, dur, type, vol) {
     if (muted) return;
     try {
@@ -226,7 +259,7 @@
           setTimeout(function () { document.getElementById('boot-screen').classList.add('hidden'); }, 600);
           updateClock(); setInterval(updateClock, 1000);
           updateDesktopClock(); setInterval(updateDesktopClock, 1000);
-          applyTheme(currentTheme); applyWallpaper(); updateVolumeUI(); applyTabDisguise(store.tabDisguise || 'off');
+          applyTheme(currentTheme); applyWallpaper(); updateVolumeUI(); applyTabDisguise(store.tabDisguise || 'off'); applyProfileUI();
           showToast('Welcome to OrbitOS');
           if (!store.tipsSeen) setTimeout(function () { document.getElementById('tips-overlay').classList.remove('hidden'); }, 500);
           setTimeout(restoreSession, 800);
@@ -743,6 +776,8 @@
         return '<div class="games-grid">' +
           '<div class="game-card" data-game="nightshift"><div class="game-emoji">🔦</div><h4>Nightshift</h4><p>Pixel Palace · 5 nights</p></div>' +
           '<div class="game-card" data-game="race"><div class="game-emoji">🏎️</div><h4>Orbit Race</h4><p>Top-down racing</p></div>' +
+          '<div class="game-card" data-game="tetris"><div class="game-emoji">🧱</div><h4>Tetris</h4><p>Classic stack</p></div>' +
+          '<div class="game-card" data-game="breakout"><div class="game-emoji">🔴</div><h4>Breakout</h4><p>Brick breaker</p></div>' +
           '<div class="game-card" data-game="snake"><div class="game-emoji">🐍</div><h4>Snake</h4><p>Classic + D-pad</p></div>' +
           '<div class="game-card" data-game="ttt"><div class="game-emoji">❌</div><h4>Tic-Tac-Toe</h4><p>Local play</p></div>' +
           '<div class="game-card" data-game="2048"><div class="game-emoji">🔢</div><h4>2048</h4><p>Swipe or arrows</p></div>' +
@@ -758,6 +793,8 @@
             var g = card.dataset.game;
             if (g === 'nightshift') openNightshift();
             else if (g === 'race') openRace();
+            else if (g === 'tetris') openTetris();
+            else if (g === 'breakout') openBreakout();
             else if (g === 'snake') openSnake(); else if (g === 'ttt') openTTT();
             else if (g === '2048') open2048(); else if (g === 'memory') openMemory();
             else if (g === 'mines') openMines(); else if (g === 'pong') openPong();
@@ -772,7 +809,7 @@
       title: 'Terminal', icon: '💻', width: 640, height: 420,
       content: function () {
         return '<div class="terminal-body" id="term-body"><div class="terminal-output" id="term-output">OrbitOS Terminal v1.5\nType "help" for commands.\n\n</div>' +
-          '<div class="terminal-input-line"><span class="terminal-prompt" id="term-prompt">orbit@github:~$</span>' +
+          '<div class="terminal-input-line"><span class="terminal-prompt" id="term-prompt">user@orbit:~$</span>' +
           '<input class="terminal-input" id="term-input" type="text" autofocus autocomplete="off" spellcheck="false"></div></div>';
       },
       init: function (win) {
@@ -781,28 +818,189 @@
         const body = win.el.querySelector('#term-body');
         const promptEl = win.el.querySelector('#term-prompt');
         let cwd = '~';
+        (function () { var p = getProfile(); promptEl.textContent = p.handle + '@orbit:~$'; })();
         const history = []; let histIndex = -1;
+        var vfs = store.vfs || {
+          'README.md': '# OrbitOS\nBrowser desktop for GitHub Pages.\n',
+          'secret.txt': 'The cake is a lie.',
+          'notes.txt': 'Hello from the terminal.\n',
+          'todo.md': '- [ ] Explore Games\n- [ ] Set profile in Settings\n'
+        };
+        function saveVfs() { saveStore({ vfs: vfs }); store = loadStore(); }
+        function listDir() {
+          var keys = Object.keys(vfs).sort();
+          return 'Desktop/  Documents/  Games/  Music/\n' + keys.join('  ');
+        }
         const commands = {
-          help: function () { return 'help clear date echo whoami neofetch ls cat pwd cd uname fortune history matrix games about mute unmute'; },
+          help: function () {
+            return 'Available commands:\n' +
+              '  help man clear date echo whoami id uname hostname\n' +
+              '  pwd cd ls cat head tail wc touch mkdir rm mv cp\n' +
+              '  grep find df free uptime ps kill env printenv\n' +
+              '  history fortune neofetch matrix cal which true false\n' +
+              '  sudo curl wget python nano vim exit logout\n' +
+              '  games about mute unmute profile settings';
+          },
+          man: function (a) {
+            var pages = {
+              ls: 'ls — list directory contents',
+              cat: 'cat [file] — print file',
+              grep: 'grep PATTERN [file] — search text',
+              cd: 'cd [dir] — change directory',
+              touch: 'touch FILE — create empty file',
+              rm: 'rm FILE — remove file',
+              echo: 'echo [args...] — print arguments',
+              neofetch: 'neofetch — system info'
+            };
+            return pages[(a[0] || '').toLowerCase()] || 'man: no manual entry for ' + (a[0] || 'topic') + '\nTry: man ls | man cat | man grep';
+          },
           clear: function () { output.textContent = ''; return null; },
           date: function () { return new Date().toString(); },
+          cal: function () {
+            var n = new Date();
+            return n.toLocaleString([], { month: 'long', year: 'numeric' }) + '\n' +
+              'Su Mo Tu We Th Fr Sa\n(use desktop clock for full calendar)';
+          },
           echo: function (a) { return a.join(' '); },
-          whoami: function () { return 'orbit-user'; },
-          uname: function () { return 'OrbitOS 1.1.0 GitHub-Pages'; },
-          pwd: function () { return cwd === '~' ? '/home/orbit' : cwd; },
+          whoami: function () { return getProfile().handle; },
+          id: function () { var p = getProfile(); return 'uid=1000(' + p.handle + ') gid=1000(' + p.handle + ') groups=1000'; },
+          uname: function (a) {
+            if (a[0] === '-a') return 'OrbitOS github-pages 1.5.5 browser js ' + (navigator.platform || 'web');
+            return 'OrbitOS';
+          },
+          hostname: function () { return 'orbit-github'; },
+          pwd: function () { return cwd === '~' ? '/home/' + getProfile().handle : (cwd.indexOf('/') === 0 ? cwd : '/home/' + getProfile().handle + '/' + cwd.replace(/^~\//, '')); },
           cd: function (a) {
-            if (!a[0] || a[0] === '~' || a[0] === '/' || a[0] === '..') cwd = '~';
-            else cwd = '~/' + a[0].replace(/^\//, '');
-            promptEl.textContent = 'orbit@github:' + cwd + '$'; return null;
+            if (!a[0] || a[0] === '~' || a[0] === '/' || a[0] === '..' || a[0] === '$HOME') cwd = '~';
+            else cwd = '~/' + a[0].replace(/^\//, '').replace(/^~\//, '');
+            promptEl.textContent = getProfile().handle + '@orbit:' + cwd + '$';
+            return null;
           },
-          ls: function () { return 'Desktop/ Documents/ Games/ Music/ README.md secret.txt'; },
+          ls: function (a) {
+            if (a[0] === '-la' || a[0] === '-l' || a[0] === '-a') {
+              return Object.keys(vfs).sort().map(function (k) {
+                return '-rw-r--r-- 1 ' + getProfile().handle + ' users ' + String(vfs[k].length).padStart(5) + ' ' + k;
+              }).join('\n') || '(empty)';
+            }
+            return listDir();
+          },
           cat: function (a) {
-            if (a[0] === 'README.md') return 'OrbitOS — desktop in the browser. Open Files for full README.';
-            if (a[0] === 'secret.txt') return 'The cake is a lie.';
-            return 'cat: ' + (a[0] || '') + ': No such file';
+            if (!a[0]) return 'cat: missing file operand';
+            if (vfs[a[0]] != null) return vfs[a[0]];
+            if (a[0] === 'README.md') return 'OrbitOS — desktop in the browser.';
+            return 'cat: ' + a[0] + ': No such file or directory';
           },
-          neofetch: function () { return 'orbit@github\nOS: OrbitOS 1.1\nUptime: ' + Math.floor(performance.now() / 1000) + 's\nTheme: Cyan Nebula'; },
-          fortune: function () { var f = ['127.0.0.1 is home', 'It works on my machine', 'Stay curious']; return f[Math.floor(Math.random() * f.length)]; },
+          head: function (a) {
+            var n = 10, file = a[0];
+            if (a[0] === '-n' && a[1]) { n = parseInt(a[1], 10) || 10; file = a[2]; }
+            if (!file || vfs[file] == null) return 'head: cannot open file';
+            return vfs[file].split('\n').slice(0, n).join('\n');
+          },
+          tail: function (a) {
+            var n = 10, file = a[0];
+            if (a[0] === '-n' && a[1]) { n = parseInt(a[1], 10) || 10; file = a[2]; }
+            if (!file || vfs[file] == null) return 'tail: cannot open file';
+            var lines = vfs[file].split('\n');
+            return lines.slice(Math.max(0, lines.length - n)).join('\n');
+          },
+          wc: function (a) {
+            if (!a[0] || vfs[a[0]] == null) return 'wc: no file';
+            var text = vfs[a[0]];
+            var lines = text ? text.split('\n').length : 0;
+            var words = text.trim() ? text.trim().split(/\s+/).length : 0;
+            return lines + ' ' + words + ' ' + text.length + ' ' + a[0];
+          },
+          touch: function (a) {
+            if (!a[0]) return 'touch: missing file operand';
+            if (vfs[a[0]] == null) vfs[a[0]] = '';
+            saveVfs(); return null;
+          },
+          mkdir: function (a) { return a[0] ? 'mkdir: created directory \'' + a[0] + '\' (virtual)' : 'mkdir: missing operand'; },
+          rm: function (a) {
+            if (!a[0]) return 'rm: missing operand';
+            if (vfs[a[0]] == null) return 'rm: cannot remove \'' + a[0] + '\': No such file';
+            delete vfs[a[0]]; saveVfs(); return null;
+          },
+          mv: function (a) {
+            if (!a[0] || !a[1]) return 'mv: missing operand';
+            if (vfs[a[0]] == null) return 'mv: cannot stat \'' + a[0] + '\'';
+            vfs[a[1]] = vfs[a[0]]; delete vfs[a[0]]; saveVfs(); return null;
+          },
+          cp: function (a) {
+            if (!a[0] || !a[1]) return 'cp: missing operand';
+            if (vfs[a[0]] == null) return 'cp: cannot stat \'' + a[0] + '\'';
+            vfs[a[1]] = vfs[a[0]]; saveVfs(); return null;
+          },
+          grep: function (a) {
+            if (!a[0]) return 'usage: grep PATTERN [file]';
+            var pat = a[0], file = a[1];
+            if (file) {
+              if (vfs[file] == null) return 'grep: ' + file + ': No such file';
+              return vfs[file].split('\n').filter(function (l) { return l.toLowerCase().indexOf(pat.toLowerCase()) >= 0; }).join('\n') || '';
+            }
+            return Object.keys(vfs).filter(function (k) { return k.indexOf(pat) >= 0; }).join('\n') || '';
+          },
+          find: function (a) {
+            var q = (a[0] || '').replace(/^\.\//, '');
+            return Object.keys(vfs).filter(function (k) { return !q || k.indexOf(q) >= 0; }).map(function (k) { return './' + k; }).join('\n') || '';
+          },
+          df: function () { return 'Filesystem  Size  Used  Avail  Use%\nlocalStorage  5.0M  1.2M  3.8M  24%\nIndexedDB     ∞     —     ∞     —'; },
+          free: function () { return '              total        used\nMem:          browser      heap\nSwap:         n/a          n/a'; },
+          uptime: function () {
+            var s = Math.floor(performance.now() / 1000);
+            var m = Math.floor(s / 60); s = s % 60;
+            return 'up ' + m + ' min, ' + s + ' sec, 1 user, load average: 0.00, 0.01, 0.05';
+          },
+          ps: function () {
+            var rows = ['  PID TTY          TIME CMD', '    1 pts/0    00:00:00 init', '   42 pts/0    00:00:00 orbit-shell'];
+            windows.filter(function (w) { return !w.closed; }).forEach(function (w, i) {
+              rows.push('  ' + (100 + i) + ' pts/0    00:00:01 ' + w.appId);
+            });
+            return rows.join('\n');
+          },
+          kill: function (a) {
+            if (!a[0]) return 'kill: usage: kill PID';
+            var pid = parseInt(a[0], 10);
+            if (pid >= 100) {
+              var open = windows.filter(function (w) { return !w.closed; });
+              var w = open[pid - 100];
+              if (w) { closeWindow(w.id); return 'Terminated ' + w.appId; }
+            }
+            return 'kill: (' + a[0] + ') No such process';
+          },
+          env: function () { return printenv(); },
+          printenv: function () {
+            var p = getProfile();
+            return 'HOME=/home/' + p.handle + '\nUSER=' + p.handle + '\nSHELL=/bin/orbitsh\nTERM=orbit-vt\nOS=OrbitOS\nTHEME=' + currentTheme;
+          },
+          which: function (a) { return a[0] && commands[a[0]] ? '/usr/bin/' + a[0] : ''; },
+          true: function () { return null; },
+          false: function () { return 'false'; },
+          sudo: function (a) { return a.length ? 'sudo: ' + a.join(' ') + '\n(nice try — you are already root on this demo)' : 'usage: sudo COMMAND'; },
+          curl: function (a) { return a[0] ? 'curl: (7) simulated — no network fetch from terminal\nURL: ' + a[0] : 'curl: try curl https://example.com'; },
+          wget: function (a) { return commands.curl(a); },
+          python: function () { return 'Python 3.12.0 (OrbitOS)\nType exit() to leave — not a real REPL.\n>>> print("hello")\nhello'; },
+          nano: function (a) { openApp('notepad'); return 'Opening Notepad' + (a[0] ? ' (edit ' + a[0] + ' in GUI)' : ''); },
+          vim: function (a) { return 'vim: not installed — try nano or open Notepad'; },
+          exit: function () { closeWindow(win.id); return null; },
+          logout: function () { return commands.exit([]); },
+          profile: function () { openApp('settings'); return 'Open Settings → Profile'; },
+          settings: function () { openApp('settings'); return 'Opening Settings...'; },
+          neofetch: function () {
+            var p = getProfile();
+            return p.avatar + '  ' + p.handle + '@orbit\n' +
+              'OS: OrbitOS 1.5.5 (browser)\n' +
+              'Host: GitHub Pages\n' +
+              'Uptime: ' + Math.floor(performance.now() / 1000) + 's\n' +
+              'Shell: orbitsh\n' +
+              'Theme: ' + currentTheme + '\n' +
+              'Resolution: ' + window.innerWidth + 'x' + window.innerHeight + '\n' +
+              'Terminal: Orbit Terminal';
+          },
+          fortune: function () {
+            var f = ['127.0.0.1 is home', 'It works on my machine', 'Stay curious', 'rm -rf / is a bad idea', 'sudo make me a sandwich', 'There is no cloud, only someone else\'s computer'];
+            return f[Math.floor(Math.random() * f.length)];
+          },
           history: function () { return history.map(function (h, i) { return '  ' + (i + 1) + '  ' + h; }).join('\n') || '(empty)'; },
           matrix: function () { showToast('Wake up, Neo...'); return 'Follow the white rabbit.'; },
           games: function () { openApp('games'); return 'Opening Games...'; },
@@ -810,13 +1008,14 @@
           mute: function () { if (!muted) toggleMute(); return 'Muted.'; },
           unmute: function () { if (muted) toggleMute(); return 'Unmuted.'; }
         };
+        function printenv() { return commands.printenv([]); }
         function run(line) {
           const parts = line.trim().split(/\s+/);
           const cmd = (parts[0] || '').toLowerCase(); const args = parts.slice(1);
           if (!cmd) return;
           history.push(line); histIndex = history.length;
           var result = commands[cmd] ? commands[cmd](args) : (sfx('error'), 'Command not found: ' + cmd);
-          output.textContent += 'orbit@github:' + cwd + '$ ' + line + '\n';
+          output.textContent += getProfile().handle + '@orbit:' + cwd + '$ ' + line + '\n';
           if (result !== null && result !== undefined) output.textContent += result + '\n\n';
           body.scrollTop = body.scrollHeight;
         }
@@ -1111,6 +1310,11 @@
           '<div class="settings-section"><h3>Sound</h3><div class="settings-row"><span>Mute UI & music</span><button type="button" id="settings-mute">Toggle Mute</button></div>' +
           '<div class="settings-row vol-row"><span>Volume</span><input type="range" id="settings-vol" min="0" max="100" value="70"></div></div>' +
           '<div class="settings-section"><h3>Accessibility</h3><div class="settings-row"><span>Reduced motion</span><button type="button" id="settings-motion">Toggle</button></div></div>' +
+          '<div class="settings-section"><h3>Profile</h3>' +
+          '<div class="settings-row"><span>Display name</span><input id="profile-name" placeholder="Orbit User" style="flex:1;max-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.35);color:var(--text)"></div>' +
+          '<div class="settings-row"><span>Handle</span><input id="profile-handle" placeholder="orbit" style="flex:1;max-width:200px;padding:8px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.35);color:var(--text)"></div>' +
+          '<div class="settings-row"><span>Avatar</span><input id="profile-avatar" placeholder="🚀" maxlength="4" style="width:64px;padding:8px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.35);color:var(--text);text-align:center"></div>' +
+          '<div class="settings-row"><span></span><button type="button" id="profile-save" style="padding:8px 14px;border:none;border-radius:8px;background:var(--accent);color:#0a0a1a;font-weight:600;cursor:pointer">Save profile</button></div></div>' +
           '<div class="settings-section"><h3>Tab disguise</h3>' +
           '<p style="font-size:0.78rem;color:var(--text-dim);margin:0 0 10px;line-height:1.4">Changes only the browser tab title &amp; icon (history/switcher). You stay on OrbitOS.</p>' +
           '<div class="settings-row"><span>Disguise as</span>' +
@@ -1128,7 +1332,7 @@
           '</select></div></div>' +
           '<div class="settings-section"><h3>Desktop</h3><div class="settings-row"><span>Floating sticky</span><button type="button" id="settings-sticky">Add sticky</button></div>' +
           '<div class="settings-row"><span>Apps</span><span style="color:var(--text-dim);font-size:0.8rem">Start menu only (◉)</span></div></div>' +
-          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.5.4</span></div>' +
+          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.5.5</span></div>' +
           '<div class="settings-row"><span>Restore session on boot</span><span style="color:var(--text-dim)">On</span></div>' +
           '<div class="settings-row"><span>Clear local data</span><button type="button" id="settings-clear">Clear</button></div></div></div>';
       },
@@ -1180,6 +1384,24 @@
         });
         var stickyBtn = win.el.querySelector('#settings-sticky');
         if (stickyBtn) stickyBtn.addEventListener('click', function () { addFloatSticky(); sfx('open'); });
+        var pr = getProfile();
+        var pn = win.el.querySelector('#profile-name');
+        var ph = win.el.querySelector('#profile-handle');
+        var pa = win.el.querySelector('#profile-avatar');
+        if (pn) pn.value = pr.name;
+        if (ph) ph.value = pr.handle;
+        if (pa) pa.value = pr.avatar;
+        var ps = win.el.querySelector('#profile-save');
+        if (ps) ps.addEventListener('click', function () {
+          var name = (pn && pn.value.trim()) || 'Orbit User';
+          var handle = (ph && ph.value.trim().replace(/[^a-zA-Z0-9_-]/g, '')) || 'orbit';
+          var avatar = (pa && pa.value.trim()) || '🚀';
+          saveStore({ profileName: name, profileHandle: handle, profileAvatar: avatar });
+          store = loadStore();
+          applyProfileUI();
+          showToast('Profile saved');
+          sfx('success');
+        });
         var disguiseSel = win.el.querySelector('#tab-disguise-select');
         if (disguiseSel) {
           disguiseSel.value = store.tabDisguise || 'off';
@@ -1438,11 +1660,11 @@
       title: 'About OrbitOS', icon: 'ℹ️', width: 460, height: 520,
       content: function () {
         return '<div class="about-body"><div class="about-logo">🚀</div><h2>OrbitOS</h2>' +
-          '<p class="version">Version 1.5.4 — Studio Pack</p>' +
+          '<p class="version">Version 1.5.5 — Studio Pack</p>' +
           '<p>A complete desktop OS in pure HTML, CSS & JavaScript for GitHub Pages.</p>' +
           '<div class="about-features"><span>🪟 Windows</span><span>🎮 Games</span><span>🎵 Music</span><span>🤖 Assistant</span><span>🔦 Nightshift</span><span>🎨 Paint</span></div>' +
           '<div class="changelog"><h4>Changelog</h4><ul>' +
-          '<li><strong>1.5.4</strong> — Panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
+          '<li><strong>1.5.5</strong> — Profile, Tetris, Breakout, Unix terminal; Panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
           '<li><strong>1.5.0</strong> — Generative music studio, mobile polish</li>' +
           '<li><strong>1.4.x</strong> — Video, To-Do, Markdown, Solitaire, clipboard</li>' +
           '<li><strong>1.3–1.0</strong> — Themes, games, window manager, core apps</li></ul></div>' +
@@ -1475,7 +1697,7 @@
           { keys: ['lock', 'password', 'screen'], text: 'Lock with Ctrl+L or the lock icon in the tray. Click or press a key to unlock (no password on this demo).' },
           { keys: ['clipboard', 'copy', 'paste'], text: 'Copy text anywhere, then Ctrl+Shift+V or the 📋 tray icon for session clipboard history.' },
           { keys: ['file', 'explorer', 'readme', 'document'], text: 'Open Files to browse virtual folders. Double-click README.md to view it.' },
-          { keys: ['terminal', 'shell', 'command', 'neofetch'], text: 'Open Terminal. Try: help, neofetch, ls, cat README.md, fortune, date.' },
+          { keys: ['terminal', 'shell', 'command', 'neofetch', 'unix', 'grep'], text: 'Open Terminal. Try: help, man ls, neofetch, ls -la, touch a.txt, cat, grep, ps, kill, df, uptime, fortune.' },
           { keys: ['sticky', 'note', 'stickies'], text: 'Open Stickies or use command palette → Add desktop sticky. Drag floating notes around the desktop.' },
           { keys: ['todo', 'kanban', 'task', 'board'], text: 'Open To-Do Board for a simple kanban (columns + cards).' },
           { keys: ['markdown', 'md', 'preview'], text: 'Open Markdown for side-by-side edit + live preview.' },
@@ -1484,7 +1706,7 @@
           { keys: ['browser', 'web', 'proxy'], text: 'Proxy Browser: many sites block embeds — use bookmarks or Open in new tab.' },
           { keys: ['paint', 'draw'], text: 'Open Paint to draw on a canvas with basic tools.' },
           { keys: ['calculator', 'calc', 'math'], text: 'Open Calculator for basic arithmetic.' },
-          { keys: ['settings', 'preference'], text: 'Settings: theme, mute, custom wallpaper URL, reduced motion, clear local data.' },
+          { keys: ['settings', 'preference', 'profile', 'avatar', 'username'], text: 'Settings → Profile for name, handle, avatar. Also theme, tab disguise, wallpaper, mute.' },
           { keys: ['mobile', 'phone', 'touch'], text: 'On phones: larger taskbar, touch-friendly icons. Games include on-screen controls where needed.' },
           { keys: ['start', 'menu', 'search app'], text: 'Click ◉ on the taskbar. Type in the search box to filter apps.' },
           { keys: ['run', 'open app'], text: 'Ctrl+R or Start → Run, then type an app name (browser, games, terminal…).' },
@@ -2186,6 +2408,201 @@
     }, 50);
   }
 
+
+  function openTetris() {
+    const win = createWindow('tetris-game', 'Tetris', '🧱',
+      '<div class="tetris-body"><div class="tetris-hud">Score <strong id="tet-score">0</strong> · Lines <strong id="tet-lines">0</strong></div>' +
+      '<canvas id="tet-canvas" width="240" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="tet-start">Start</button><span class="race-help">←→ move · ↑ rotate · ↓ soft drop · Space hard</span></div></div>', 300, 520);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#tet-canvas');
+      var ctx = canvas.getContext('2d');
+      var COLS = 10, ROWS = 20, SIZE = 20;
+      var board, piece, score, lines, timer, running;
+      var SHAPES = {
+        I: [[1,1,1,1]], O: [[1,1],[1,1]], T: [[0,1,0],[1,1,1]],
+        L: [[1,0],[1,0],[1,1]], J: [[0,1],[0,1],[1,1]],
+        S: [[0,1,1],[1,1,0]], Z: [[1,1,0],[0,1,1]]
+      };
+      var COLORS = { I: '#00d4ff', O: '#facc15', T: '#c084fc', L: '#fb923c', J: '#60a5fa', S: '#4ade80', Z: '#f87171' };
+      var keys = Object.keys(SHAPES);
+      function empty() { var b = []; for (var r = 0; r < ROWS; r++) { b[r] = []; for (var c = 0; c < COLS; c++) b[r][c] = 0; } return b; }
+      function spawn() {
+        var k = keys[(Math.random() * keys.length) | 0];
+        piece = { shape: SHAPES[k].map(function (r) { return r.slice(); }), x: 3, y: 0, color: COLORS[k] };
+        if (collide(piece.x, piece.y, piece.shape)) { running = false; clearInterval(timer); showToast('Game over · ' + score); }
+      }
+      function collide(x, y, shape) {
+        for (var r = 0; r < shape.length; r++) for (var c = 0; c < shape[r].length; c++) {
+          if (!shape[r][c]) continue;
+          var ny = y + r, nx = x + c;
+          if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+          if (ny >= 0 && board[ny][nx]) return true;
+        }
+        return false;
+      }
+      function merge() {
+        piece.shape.forEach(function (row, r) {
+          row.forEach(function (v, c) {
+            if (v && piece.y + r >= 0) board[piece.y + r][piece.x + c] = piece.color;
+          });
+        });
+      }
+      function clearLines() {
+        var cleared = 0;
+        for (var r = ROWS - 1; r >= 0; r--) {
+          if (board[r].every(function (c) { return c; })) {
+            board.splice(r, 1);
+            board.unshift([]);
+            for (var c = 0; c < COLS; c++) board[0][c] = 0;
+            cleared++; r++;
+          }
+        }
+        if (cleared) {
+          lines += cleared;
+          score += [0, 100, 300, 500, 800][cleared] || cleared * 100;
+          win.el.querySelector('#tet-score').textContent = score;
+          win.el.querySelector('#tet-lines').textContent = lines;
+          sfx('success');
+        }
+      }
+      function rotate() {
+        var s = piece.shape;
+        var n = s[0].length, m = s.length;
+        var next = [];
+        for (var c = 0; c < n; c++) {
+          next[c] = [];
+          for (var r = m - 1; r >= 0; r--) next[c].push(s[r][c]);
+        }
+        if (!collide(piece.x, piece.y, next)) piece.shape = next;
+      }
+      function tick() {
+        if (!running) return;
+        if (!collide(piece.x, piece.y + 1, piece.shape)) piece.y++;
+        else { merge(); clearLines(); spawn(); }
+        draw();
+      }
+      function draw() {
+        ctx.fillStyle = '#0a0a14';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+          if (board[r][c]) {
+            ctx.fillStyle = board[r][c];
+            ctx.fillRect(c * SIZE + 1, r * SIZE + 1, SIZE - 2, SIZE - 2);
+          }
+        }
+        if (piece) piece.shape.forEach(function (row, r) {
+          row.forEach(function (v, c) {
+            if (!v) return;
+            ctx.fillStyle = piece.color;
+            ctx.fillRect((piece.x + c) * SIZE + 1, (piece.y + r) * SIZE + 1, SIZE - 2, SIZE - 2);
+          });
+        });
+      }
+      function start() {
+        board = empty(); score = 0; lines = 0; running = true;
+        win.el.querySelector('#tet-score').textContent = '0';
+        win.el.querySelector('#tet-lines').textContent = '0';
+        spawn();
+        clearInterval(timer);
+        timer = setInterval(tick, 450);
+        draw();
+      }
+      win.el.querySelector('#tet-start').addEventListener('click', start);
+      function kh(e) {
+        if (!running || !piece) return;
+        if (e.key === 'ArrowLeft' && !collide(piece.x - 1, piece.y, piece.shape)) piece.x--;
+        if (e.key === 'ArrowRight' && !collide(piece.x + 1, piece.y, piece.shape)) piece.x++;
+        if (e.key === 'ArrowDown' && !collide(piece.x, piece.y + 1, piece.shape)) { piece.y++; score++; }
+        if (e.key === 'ArrowUp') rotate();
+        if (e.key === ' ') {
+          while (!collide(piece.x, piece.y + 1, piece.shape)) { piece.y++; score += 2; }
+          merge(); clearLines(); spawn();
+        }
+        if (['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].indexOf(e.key) >= 0) e.preventDefault();
+        win.el.querySelector('#tet-score').textContent = score;
+        draw();
+      }
+      document.addEventListener('keydown', kh);
+      draw();
+    }, 40);
+  }
+
+  function openBreakout() {
+    const win = createWindow('breakout-game', 'Breakout', '🔴',
+      '<div class="brk-body"><div class="tetris-hud">Score <strong id="brk-score">0</strong> · Lives <strong id="brk-lives">3</strong></div>' +
+      '<canvas id="brk-canvas" width="400" height="320"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="brk-start">Start</button><span class="race-help">← → or mouse · Space launch</span></div></div>', 440, 440);
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#brk-canvas');
+      var ctx = canvas.getContext('2d');
+      var W = 400, H = 320, score = 0, lives = 3, running = false, raf;
+      var paddle = { x: W / 2 - 40, w: 80, h: 10 };
+      var ball = { x: W / 2, y: H - 40, vx: 3, vy: -3, r: 5 };
+      var bricks = [], keys = {};
+      function buildBricks() {
+        bricks = [];
+        var colors = ['#ff4466', '#fb923c', '#facc15', '#4ade80', '#00d4ff'];
+        for (var row = 0; row < 5; row++) for (var col = 0; col < 8; col++) {
+          bricks.push({ x: 20 + col * 46, y: 30 + row * 18, w: 42, h: 14, color: colors[row], alive: true });
+        }
+      }
+      function resetBall() {
+        ball.x = paddle.x + paddle.w / 2; ball.y = H - 40; ball.vx = 3 * (Math.random() > 0.5 ? 1 : -1); ball.vy = -3;
+      }
+      function frame() {
+        if (!running) return;
+        if (keys['ArrowLeft'] || keys['a']) paddle.x = Math.max(0, paddle.x - 6);
+        if (keys['ArrowRight'] || keys['d']) paddle.x = Math.min(W - paddle.w, paddle.x + 6);
+        ball.x += ball.vx; ball.y += ball.vy;
+        if (ball.x < ball.r || ball.x > W - ball.r) ball.vx *= -1;
+        if (ball.y < ball.r) ball.vy *= -1;
+        if (ball.y > H) {
+          lives--; win.el.querySelector('#brk-lives').textContent = lives;
+          if (lives <= 0) { running = false; showToast('Game over · ' + score); sfx('error'); return; }
+          resetBall();
+        }
+        if (ball.y + ball.r >= H - 20 && ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
+          ball.vy = -Math.abs(ball.vy);
+          ball.vx = ((ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2)) * 4;
+        }
+        bricks.forEach(function (b) {
+          if (!b.alive) return;
+          if (ball.x > b.x && ball.x < b.x + b.w && ball.y - ball.r < b.y + b.h && ball.y + ball.r > b.y) {
+            b.alive = false; ball.vy *= -1; score += 10;
+            win.el.querySelector('#brk-score').textContent = score; sfx('click');
+          }
+        });
+        if (bricks.every(function (b) { return !b.alive; })) {
+          buildBricks(); ball.vx *= 1.1; ball.vy *= 1.1; showToast('Level up!');
+        }
+        ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+        bricks.forEach(function (b) {
+          if (!b.alive) return;
+          ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, b.w, b.h);
+        });
+        ctx.fillStyle = '#00d4ff'; ctx.fillRect(paddle.x, H - 18, paddle.w, paddle.h);
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+        raf = requestAnimationFrame(frame);
+      }
+      function start() {
+        score = 0; lives = 3; running = true;
+        win.el.querySelector('#brk-score').textContent = '0';
+        win.el.querySelector('#brk-lives').textContent = '3';
+        buildBricks(); resetBall();
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(frame);
+      }
+      win.el.querySelector('#brk-start').addEventListener('click', start);
+      canvas.addEventListener('mousemove', function (e) {
+        var rect = canvas.getBoundingClientRect();
+        paddle.x = Math.max(0, Math.min(W - paddle.w, (e.clientX - rect.left) - paddle.w / 2));
+      });
+      document.addEventListener('keydown', function (e) { keys[e.key] = true; });
+      document.addEventListener('keyup', function (e) { keys[e.key] = false; });
+    }, 40);
+  }
+
   function openSnake() {
     const win = createWindow('snake-game', 'Snake', '🐍',
       '<div class="snake-container"><div class="snake-hud"><span>Score: <strong id="snake-score">0</strong></span><span>Best: <strong id="snake-best">0</strong></span></div>' +
@@ -2736,6 +3153,8 @@
     { id: 'solitaire', icon: '🃏', label: 'Play Solitaire', type: 'game', fn: function () { openSolitaire(); } },
     { id: 'nightshift', icon: '🔦', label: 'Play Nightshift', type: 'game', fn: function () { openNightshift(); } },
     { id: 'race', icon: '🏎️', label: 'Play Orbit Race', type: 'game', fn: function () { openRace(); } },
+    { id: 'tetris', icon: '🧱', label: 'Play Tetris', type: 'game', fn: function () { openTetris(); } },
+    { id: 'breakout', icon: '🔴', label: 'Play Breakout', type: 'game', fn: function () { openBreakout(); } },
     { id: 'assistant', icon: '🤖', label: 'Orbit Assistant', type: 'app', fn: function () { openApp('assistant'); } },
     { id: 'clockapp', icon: '🕐', label: 'Clock', type: 'app', fn: function () { openApp('clockapp'); } },
     { id: 'gallery', icon: '🖼️', label: 'Gallery', type: 'app', fn: function () { openApp('gallery'); } },
@@ -2799,13 +3218,7 @@
     document.getElementById('lock-screen').classList.add('hidden');
     resetIdle();
   }
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
-    } else {
-      document.exitFullscreen && document.exitFullscreen();
-    }
-  }
+  function toggleFullscreen() { safeFullscreenToggle(); }
 
 
   function openSolitaire() {
