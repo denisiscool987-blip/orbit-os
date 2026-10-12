@@ -1359,3 +1359,45 @@ body {
 @media (max-width: 700px) {
   .games-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
+
+.games-section-label {
+  width: 100%; padding: 8px 4px 4px; font-size: 0.75rem; font-weight: 600;
+  color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+/* 1.6.2 utilities & achievements */
+.util-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.util-row { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+.util-row span { min-width: 56px; color: var(--text-dim); }
+.util-row input[type="number"], .util-row select, .util-row input[type="range"] {
+  flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: rgba(0,0,0,0.3); color: var(--text);
+}
+.util-check { font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+.pg-out {
+  font-family: var(--mono); font-size: 1rem; padding: 14px; border-radius: 10px;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); word-break: break-all;
+  text-align: center; min-height: 1.4em;
+}
+.util-btns { display: flex; gap: 8px; }
+.util-btns button, .sw-btns button {
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: rgba(0,212,255,0.12); color: var(--accent); cursor: pointer; font-weight: 600;
+}
+.pm-mode { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 4px; }
+.ach-body { padding: 12px; overflow-y: auto; max-height: 100%; }
+.ach-summary { color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+.ach-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 8px;
+  border-bottom: 1px solid var(--border); opacity: 0.45;
+}
+.ach-row.unlocked { opacity: 1; }
+.ach-icon { font-size: 1.4rem; width: 2rem; text-align: center; }
+.ach-desc { font-size: 0.78rem; color: var(--text-dim); }
+.ach-state { margin-left: auto; color: var(--accent); font-weight: 700; }
+.help-keys { padding: 16px; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; }
+.help-keys kbd {
+  display: inline-block; padding: 2px 7px; border-radius: 5px;
+  border: 1px solid var(--border); background: rgba(0,0,0,0.35);
+  font-family: var(--mono); font-size: 0.8rem;
+}

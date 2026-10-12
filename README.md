@@ -1,23 +1,24 @@
-# OrbitOS v1.6.0 — Arcade Pack
+# OrbitOS v1.6.2 — Utility Pack
 
-Browser desktop OS for GitHub Pages. No backend · localStorage only.  
-Chrome · Firefox · Safari · Edge (no PWA).
+Pure HTML/CSS/JS desktop for GitHub Pages or offline (open `index.html`).
 
-## Games (22+)
-Nightshift · Orbit Race · Tetris · Breakout · **Asteroids** · **Orbit Bird** · **Invaders** · **Whack-a-Mole** · **Simon** · **Star Catcher** · **Meteor Dodge** · **Sky Jumper** · **Air Hockey** · **Lights Out** · Snake · 2048 · Memory · Minesweeper · Pong · Connect Four · Solitaire · Tic-Tac-Toe
+## New in 1.6.2
+- **Achievements** (10) — Settings or Ctrl+K
+- **Backup / restore** — Settings → Export/Import JSON
+- **F1** keyboard shortcuts help
+- **Password Generator** (crypto RNG when available)
+- **Unit Converter** (temp, length, mass, data)
+- **Pomodoro** timer (25/5)
+- **Dice & Coin**
 
-**High Scores** — saved per game (Ctrl+K → High Scores)
-
-## Features
-- Local **Profile** (Settings)
-- **Tab disguise** (Settings)
-- Panic key **`** closes tab
-- Unix-style **Terminal**
-- **Stopwatch** app
-- Generative music · Assistant · clean Start-menu desktop
+## Controls
+- P1 **WASD** · P2 **Arrows** on 2P games
+- **`** panic closes tab
+- **F1** shortcuts · **Ctrl+K** palette
 
 ## Deploy
-`index.html` · `styles.css` · `script.js` → repo root → GitHub Pages
+Site: upload `index.html`, `styles.css`, `script.js` to repo root.  
+Portable: unzip and open `index.html` in any browser.
 
 ## License
 MIT

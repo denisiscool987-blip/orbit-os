@@ -124,6 +124,7 @@
       store = loadStore();
       showToast('New best ' + game + ': ' + score + '!');
       sfx('success');
+      unlockAchievement('highscore');
       return true;
     }
     return false;
@@ -132,6 +133,96 @@
     store = loadStore();
     return (store.highScores || {})[game] || 0;
   }
+  var ACHIEVEMENTS = [
+    { id: 'first_boot', icon: '🚀', title: 'First Orbit', desc: 'Boot OrbitOS' },
+    { id: 'gamer', icon: '🎮', title: 'Arcade Pilot', desc: 'Open the Games Arcade' },
+    { id: 'terminal', icon: '💻', title: 'Shell Surfer', desc: 'Open Terminal' },
+    { id: 'music', icon: '🎵', title: 'Vibes', desc: 'Open Music Player' },
+    { id: 'profile', icon: '👤', title: 'Identity', desc: 'Save your profile' },
+    { id: 'highscore', icon: '🏆', title: 'Record Breaker', desc: 'Set any high score' },
+    { id: '2p', icon: '🤝', title: 'Local Co-op', desc: 'Start a 2-player game' },
+    { id: 'backup', icon: '💾', title: 'Time Capsule', desc: 'Export a backup' },
+    { id: 'focus', icon: '⏱️', title: 'Deep Work', desc: 'Finish a Pomodoro' },
+    { id: 'passgen', icon: '🔐', title: 'Keymaster', desc: 'Generate a password' }
+  ];
+  function unlockAchievement(id) {
+    store = loadStore();
+    var got = store.achievements || {};
+    if (got[id]) return false;
+    got[id] = Date.now();
+    saveStore({ achievements: got });
+    store = loadStore();
+    var a = ACHIEVEMENTS.filter(function (x) { return x.id === id; })[0];
+    if (a) {
+      showToast(a.icon + ' Achievement: ' + a.title);
+      sfx('success');
+    }
+    return true;
+  }
+  function openAchievements() {
+    store = loadStore();
+    var got = store.achievements || {};
+    var rows = ACHIEVEMENTS.map(function (a) {
+      var on = !!got[a.id];
+      return '<div class="ach-row' + (on ? ' unlocked' : '') + '"><span class="ach-icon">' + a.icon + '</span>' +
+        '<div><strong>' + a.title + '</strong><br><span class="ach-desc">' + a.desc + '</span></div>' +
+        '<span class="ach-state">' + (on ? '✓' : '…') + '</span></div>';
+    }).join('');
+    var n = Object.keys(got).length;
+    createWindow('achievements', 'Achievements', '🏅',
+      '<div class="ach-body"><p class="ach-summary">' + n + ' / ' + ACHIEVEMENTS.length + ' unlocked</p>' + rows + '</div>', 400, 480);
+  }
+  function exportBackup() {
+    store = loadStore();
+    var data = JSON.stringify({ orbitos: true, version: '1.6.2', exported: new Date().toISOString(), data: store }, null, 2);
+    var blob = new Blob([data], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'orbitos-backup.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    unlockAchievement('backup');
+    showToast('Backup downloaded');
+  }
+  function importBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(reader.result);
+        var data = parsed.data || parsed;
+        if (typeof data !== 'object') throw new Error('bad');
+        localStorage.setItem(STORE_KEY, JSON.stringify(data));
+        store = loadStore();
+        applyTheme(store.theme || 'cyan');
+        applyWallpaper();
+        updateVolumeUI();
+        applyTabDisguise(store.tabDisguise || 'off');
+        applyProfileUI();
+        showToast('Backup restored — reload recommended');
+        sfx('success');
+      } catch (e) {
+        showToast('Invalid backup file');
+      }
+    };
+    reader.readAsText(file);
+  }
+  function openShortcutsHelp() {
+    createWindow('shortcuts', 'Keyboard Shortcuts', '⌨️',
+      '<div class="help-keys">' +
+      '<div><kbd>Ctrl</kbd>+<kbd>K</kbd> Command palette</div>' +
+      '<div><kbd>Ctrl</kbd>+<kbd>R</kbd> Run dialog</div>' +
+      '<div><kbd>Ctrl</kbd>+<kbd>L</kbd> Lock screen</div>' +
+      '<div><kbd>Ctrl</kbd>+<kbd>W</kbd> Close window</div>' +
+      '<div><kbd>Ctrl</kbd>+<kbd>M</kbd> Minimize</div>' +
+      '<div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> Clipboard</div>' +
+      '<div><kbd>Alt</kbd>+<kbd>Tab</kbd> Switch windows</div>' +
+      '<div><kbd>F1</kbd> This help</div>' +
+      '<div><kbd>`</kbd> Panic — close tab</div>' +
+      '<div><kbd>Esc</kbd> Close menus</div>' +
+      '<p style="margin-top:12px;color:var(--text-dim);font-size:0.8rem">2P games: <strong>WASD</strong> = Player 1 · <strong>Arrows</strong> = Player 2</p>' +
+      '</div>', 380, 420);
+  }
+
   function sfx(n) {
     if (n === 'click') beep(800, 0.04, 'sine', 0.03);
     else if (n === 'open') beep(440, 0.06, 'triangle', 0.04);
@@ -278,6 +369,7 @@
           updateClock(); setInterval(updateClock, 1000);
           updateDesktopClock(); setInterval(updateDesktopClock, 1000);
           applyTheme(currentTheme); applyWallpaper(); updateVolumeUI(); applyTabDisguise(store.tabDisguise || 'off'); applyProfileUI();
+          setTimeout(function () { unlockAchievement('first_boot'); }, 800);
           showToast('Welcome to OrbitOS');
           if (!store.tipsSeen) setTimeout(function () { document.getElementById('tips-overlay').classList.remove('hidden'); }, 500);
           setTimeout(restoreSession, 800);
@@ -429,6 +521,11 @@
   });
 
   document.addEventListener('keydown', function (e) {
+    if (e.key === 'F1') {
+      e.preventDefault();
+      openShortcutsHelp();
+      return;
+    }
     // Panic key: ` (backtick) instantly closes the tab
     if (e.key === '`' || e.code === 'Backquote') {
       e.preventDefault();
@@ -789,9 +886,21 @@
       }
     },
     games: {
-      title: 'Games Arcade', icon: '🎮', width: 620, height: 520,
+      title: 'Games Arcade', icon: '🎮', width: 640, height: 560,
       content: function () {
-        return '<div class="games-grid">' +
+        return '<div class="games-section-label">2-Player Local · WASD vs Arrows</div>' +
+          '<div class="games-grid">' +
+          '<div class="game-card" data-game="duelpong"><div class="game-emoji">🏓</div><h4>Duel Pong</h4><p>WASD · Arrows</p></div>' +
+          '<div class="game-card" data-game="tron"><div class="game-emoji">🏍️</div><h4>Light Cycles</h4><p>Tron duel</p></div>' +
+          '<div class="game-card" data-game="soccer"><div class="game-emoji">⚽</div><h4>Footy</h4><p>2P soccer</p></div>' +
+          '<div class="game-card" data-game="tankduel"><div class="game-emoji">🎖️</div><h4>Tank Duel</h4><p>Arena combat</p></div>' +
+          '<div class="game-card" data-game="sumo"><div class="game-emoji">🤼</div><h4>Sumo Push</h4><p>Knock off</p></div>' +
+          '<div class="game-card" data-game="combat"><div class="game-emoji">🔫</div><h4>Laser Duel</h4><p>Top-down shoot</p></div>' +
+          '<div class="game-card" data-game="dualrace"><div class="game-emoji">🏁</div><h4>Dual Race</h4><p>Same track</p></div>' +
+          '<div class="game-card" data-game="volley"><div class="game-emoji">🏐</div><h4>Volley</h4><p>Beach duel</p></div>' +
+          '<div class="game-card" data-game="duelsnake"><div class="game-emoji">🐍</div><h4>Snake Duel</h4><p>2 snakes</p></div>' +
+          '<div class="game-card" data-game="hockey2"><div class="game-emoji">🏒</div><h4>Hockey 2P</h4><p>No CPU</p></div>' +
+          '</div><div class="games-section-label">Solo & classic</div><div class="games-grid">' +
           '<div class="game-card" data-game="nightshift"><div class="game-emoji">🔦</div><h4>Nightshift</h4><p>Pixel Palace</p></div>' +
           '<div class="game-card" data-game="race"><div class="game-emoji">🏎️</div><h4>Orbit Race</h4><p>Top-down racing</p></div>' +
           '<div class="game-card" data-game="tetris"><div class="game-emoji">🧱</div><h4>Tetris</h4><p>Classic stack</p></div>' +
@@ -824,6 +933,9 @@
               asteroids: openAsteroids, flappy: openFlappy, invaders: openInvaders, whack: openWhack,
               simon: openSimon, catcher: openCatcher, dodge: openDodge, jumper: openJumper,
               hockey: openHockey, lights: openLightsOut,
+              duelpong: openDuelPong, tron: openTron, soccer: openSoccer, tankduel: openTankDuel,
+              sumo: openSumo, combat: openCombat, dualrace: openDualRace, volley: openVolley,
+              duelsnake: openDuelSnake, hockey2: openHockey2P,
               snake: openSnake, ttt: openTTT, '2048': open2048, memory: openMemory,
               mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire
             };
@@ -1017,7 +1129,7 @@
           neofetch: function () {
             var p = getProfile();
             return p.avatar + '  ' + p.handle + '@orbit\n' +
-              'OS: OrbitOS 1.6.0 (browser)\n' +
+              'OS: OrbitOS 1.6.2 (browser)\n' +
               'Host: GitHub Pages\n' +
               'Uptime: ' + Math.floor(performance.now() / 1000) + 's\n' +
               'Shell: orbitsh\n' +
@@ -1360,7 +1472,11 @@
           '</select></div></div>' +
           '<div class="settings-section"><h3>Desktop</h3><div class="settings-row"><span>Floating sticky</span><button type="button" id="settings-sticky">Add sticky</button></div>' +
           '<div class="settings-row"><span>Apps</span><span style="color:var(--text-dim);font-size:0.8rem">Start menu only (◉)</span></div></div>' +
-          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.0</span></div>' +
+          '<div class="settings-section"><h3>Data</h3>' +
+          '<div class="settings-row"><span>Backup</span><button type="button" id="settings-export">Export JSON</button></div>' +
+          '<div class="settings-row"><span>Restore</span><button type="button" id="settings-import">Import JSON</button><input type="file" id="settings-import-file" accept="application/json,.json" hidden></div>' +
+          '<div class="settings-row"><span>Achievements</span><button type="button" id="settings-ach">View</button></div></div>' +
+          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.2</span></div>' +
           '<div class="settings-row"><span>Restore session on boot</span><span style="color:var(--text-dim)">On</span></div>' +
           '<div class="settings-row"><span>Clear local data</span><button type="button" id="settings-clear">Clear</button></div></div></div>';
       },
@@ -1427,6 +1543,7 @@
           saveStore({ profileName: name, profileHandle: handle, profileAvatar: avatar });
           store = loadStore();
           applyProfileUI();
+          unlockAchievement('profile');
           showToast('Profile saved');
           sfx('success');
         });
@@ -1439,6 +1556,19 @@
             sfx('success');
           });
         }
+        var exp = win.el.querySelector('#settings-export');
+        if (exp) exp.addEventListener('click', exportBackup);
+        var impBtn = win.el.querySelector('#settings-import');
+        var impFile = win.el.querySelector('#settings-import-file');
+        if (impBtn && impFile) {
+          impBtn.addEventListener('click', function () { impFile.click(); });
+          impFile.addEventListener('change', function () {
+            if (impFile.files && impFile.files[0]) importBackup(impFile.files[0]);
+            impFile.value = '';
+          });
+        }
+        var achBtn = win.el.querySelector('#settings-ach');
+        if (achBtn) achBtn.addEventListener('click', openAchievements);
         win.el.querySelector('#settings-clear').addEventListener('click', function () {
           if (confirm('Clear all OrbitOS saved data?')) {
             localStorage.removeItem(STORE_KEY); localStorage.removeItem('orbitos-snake-best'); store = {}; showToast('Local data cleared');
@@ -1721,15 +1851,192 @@
         });
       }
     },
+
+    passgen: {
+      title: 'Password Generator', icon: '🔐', width: 400, height: 360,
+      content: function () {
+        return '<div class="util-body">' +
+          '<label class="util-row"><span>Length</span><input type="range" id="pg-len" min="8" max="64" value="16"><strong id="pg-len-v">16</strong></label>' +
+          '<label class="util-check"><input type="checkbox" id="pg-upper" checked> Uppercase A–Z</label>' +
+          '<label class="util-check"><input type="checkbox" id="pg-lower" checked> Lowercase a–z</label>' +
+          '<label class="util-check"><input type="checkbox" id="pg-num" checked> Numbers 0–9</label>' +
+          '<label class="util-check"><input type="checkbox" id="pg-sym"> Symbols !@#$</label>' +
+          '<div class="pg-out" id="pg-out">Click Generate</div>' +
+          '<div class="util-btns"><button type="button" id="pg-gen">Generate</button><button type="button" id="pg-copy">Copy</button></div></div>';
+      },
+      init: function (win) {
+        var len = win.el.querySelector('#pg-len');
+        len.addEventListener('input', function () { win.el.querySelector('#pg-len-v').textContent = len.value; });
+        function gen() {
+          var chars = '';
+          if (win.el.querySelector('#pg-upper').checked) chars += 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+          if (win.el.querySelector('#pg-lower').checked) chars += 'abcdefghijkmnopqrstuvwxyz';
+          if (win.el.querySelector('#pg-num').checked) chars += '23456789';
+          if (win.el.querySelector('#pg-sym').checked) chars += '!@#$%&*+-_=';
+          if (!chars) { showToast('Pick at least one set'); return; }
+          var n = +len.value, out = '', arr = new Uint32Array(n);
+          if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+          else for (var i = 0; i < n; i++) arr[i] = (Math.random() * 0xffffffff) | 0;
+          for (var j = 0; j < n; j++) out += chars[arr[j] % chars.length];
+          win.el.querySelector('#pg-out').textContent = out;
+          unlockAchievement('passgen');
+          sfx('click');
+        }
+        win.el.querySelector('#pg-gen').addEventListener('click', gen);
+        win.el.querySelector('#pg-copy').addEventListener('click', function () {
+          var text = win.el.querySelector('#pg-out').textContent;
+          if (!text || text === 'Click Generate') return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { showToast('Copied'); }).catch(function () { showToast('Copy failed'); });
+          } else {
+            var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); showToast('Copied'); } catch (e) { showToast('Copy failed'); }
+            document.body.removeChild(ta);
+          }
+        });
+        gen();
+      }
+    },
+    converter: {
+      title: 'Unit Converter', icon: '📐', width: 400, height: 340,
+      content: function () {
+        return '<div class="util-body">' +
+          '<label class="util-row"><span>Type</span><select id="cv-type">' +
+          '<option value="temp">Temperature</option><option value="len">Length</option><option value="mass">Mass</option><option value="data">Data</option></select></label>' +
+          '<label class="util-row"><span>Value</span><input type="number" id="cv-in" value="1" step="any"></label>' +
+          '<label class="util-row"><span>From</span><select id="cv-from"></select></label>' +
+          '<label class="util-row"><span>To</span><select id="cv-to"></select></label>' +
+          '<div class="pg-out" id="cv-out">—</div></div>';
+      },
+      init: function (win) {
+        var units = {
+          temp: { C: 1, F: 1, K: 1 },
+          len: { m: 1, km: 0.001, cm: 100, ft: 3.28084, in: 39.3701, mi: 0.000621371 },
+          mass: { kg: 1, g: 1000, lb: 2.20462, oz: 35.274 },
+          data: { B: 1, KB: 1/1024, MB: 1/(1024*1024), GB: 1/(1024*1024*1024) }
+        };
+        function fill() {
+          var type = win.el.querySelector('#cv-type').value;
+          var keys = Object.keys(units[type]);
+          var f = win.el.querySelector('#cv-from'), tsel = win.el.querySelector('#cv-to');
+          f.innerHTML = tsel.innerHTML = keys.map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('');
+          if (keys[1]) tsel.value = keys[1];
+          calc();
+        }
+        function calc() {
+          var type = win.el.querySelector('#cv-type').value;
+          var v = parseFloat(win.el.querySelector('#cv-in').value);
+          var from = win.el.querySelector('#cv-from').value;
+          var to = win.el.querySelector('#cv-to').value;
+          var out = win.el.querySelector('#cv-out');
+          if (isNaN(v)) { out.textContent = '—'; return; }
+          var result;
+          if (type === 'temp') {
+            var c = v;
+            if (from === 'F') c = (v - 32) * 5 / 9;
+            if (from === 'K') c = v - 273.15;
+            if (to === 'C') result = c;
+            else if (to === 'F') result = c * 9 / 5 + 32;
+            else result = c + 273.15;
+          } else {
+            var base = v / units[type][from]; // wrong for len - units are multipliers FROM base
+            // redefine: store as "how many of this unit in 1 base"
+            // len: m is base, km = 0.001 means 1m = 0.001 km, so to convert v from -> to: (v / from_per_base) * to_per_base wait
+            // Actually I defined: m:1 means 1 m = 1 m, km:0.001 means 1 m = 0.001 km
+            // v from X to Y: first to meters: v / units[from]? No
+            // If units[u] = number of u in 1 meter... then v_in_m = v / units[from], result = v_in_m * units[to]
+            result = (v / units[type][from]) * units[type][to];
+            // Wait for mass kg:1, g:1000 means 1 kg = 1000 g. v_kg * 1000 = g. so result = v * (units[to]/units[from])
+            result = v * (units[type][to] / units[type][from]);
+          }
+          out.textContent = (Math.round(result * 100000) / 100000) + ' ' + to;
+        }
+        win.el.querySelector('#cv-type').addEventListener('change', fill);
+        win.el.querySelector('#cv-in').addEventListener('input', calc);
+        win.el.querySelector('#cv-from').addEventListener('change', calc);
+        win.el.querySelector('#cv-to').addEventListener('change', calc);
+        fill();
+      }
+    },
+    pomodoro: {
+      title: 'Pomodoro', icon: '🍅', width: 340, height: 320,
+      content: function () {
+        return '<div class="util-body sw-body"><div class="sw-time" id="pm-time">25:00</div>' +
+          '<div class="pm-mode" id="pm-mode">Focus</div>' +
+          '<div class="sw-btns"><button type="button" id="pm-start">Start</button>' +
+          '<button type="button" id="pm-skip">Skip</button><button type="button" id="pm-reset">Reset</button></div>' +
+          '<p style="font-size:0.78rem;color:var(--text-dim)">25 min focus · 5 min break</p></div>';
+      },
+      init: function (win) {
+        var mode = 'focus', left = 25 * 60, timer = null, running = false;
+        function fmt(s) { return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+        function paint() {
+          win.el.querySelector('#pm-time').textContent = fmt(left);
+          win.el.querySelector('#pm-mode').textContent = mode === 'focus' ? 'Focus' : 'Break';
+        }
+        function tick() {
+          left--; paint();
+          if (left <= 0) {
+            clearInterval(timer); running = false;
+            win.el.querySelector('#pm-start').textContent = 'Start';
+            if (mode === 'focus') {
+              unlockAchievement('focus');
+              showToast('Focus done — take a break');
+              mode = 'break'; left = 5 * 60;
+            } else {
+              showToast('Break over — back to focus');
+              mode = 'focus'; left = 25 * 60;
+            }
+            paint(); sfx('success');
+          }
+        }
+        win.el.querySelector('#pm-start').addEventListener('click', function () {
+          if (!running) { running = true; this.textContent = 'Pause'; timer = setInterval(tick, 1000); }
+          else { running = false; this.textContent = 'Start'; clearInterval(timer); }
+        });
+        win.el.querySelector('#pm-skip').addEventListener('click', function () {
+          clearInterval(timer); running = false;
+          win.el.querySelector('#pm-start').textContent = 'Start';
+          if (mode === 'focus') { mode = 'break'; left = 5 * 60; } else { mode = 'focus'; left = 25 * 60; }
+          paint();
+        });
+        win.el.querySelector('#pm-reset').addEventListener('click', function () {
+          clearInterval(timer); running = false; mode = 'focus'; left = 25 * 60;
+          win.el.querySelector('#pm-start').textContent = 'Start'; paint();
+        });
+        paint();
+      }
+    },
+    dice: {
+      title: 'Dice & Coin', icon: '🎲', width: 320, height: 300,
+      content: function () {
+        return '<div class="util-body sw-body"><div class="sw-time" id="dice-out">—</div>' +
+          '<div class="sw-btns"><button type="button" id="dice-d6">D6</button>' +
+          '<button type="button" id="dice-d20">D20</button>' +
+          '<button type="button" id="dice-coin">Coin</button></div>' +
+          '<button type="button" id="dice-2d6" style="margin-top:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,255,0.12);color:var(--accent);cursor:pointer">2× D6</button></div>';
+      },
+      init: function (win) {
+        function roll(n) { return 1 + Math.floor(Math.random() * n); }
+        win.el.querySelector('#dice-d6').addEventListener('click', function () { win.el.querySelector('#dice-out').textContent = String(roll(6)); sfx('click'); });
+        win.el.querySelector('#dice-d20').addEventListener('click', function () { win.el.querySelector('#dice-out').textContent = String(roll(20)); sfx('click'); });
+        win.el.querySelector('#dice-coin').addEventListener('click', function () { win.el.querySelector('#dice-out').textContent = Math.random() < 0.5 ? 'Heads' : 'Tails'; sfx('click'); });
+        win.el.querySelector('#dice-2d6').addEventListener('click', function () {
+          var a = roll(6), b = roll(6);
+          win.el.querySelector('#dice-out').textContent = a + ' + ' + b + ' = ' + (a + b);
+          sfx('click');
+        });
+      }
+    },
     about: {
       title: 'About OrbitOS', icon: 'ℹ️', width: 460, height: 520,
       content: function () {
         return '<div class="about-body"><div class="about-logo">🚀</div><h2>OrbitOS</h2>' +
-          '<p class="version">Version 1.6.0 — Arcade Pack</p>' +
+          '<p class="version">Version 1.6.2 — Utility Pack</p>' +
           '<p>A complete desktop OS in pure HTML, CSS & JavaScript for GitHub Pages.</p>' +
           '<div class="about-features"><span>🪟 Windows</span><span>🎮 Games</span><span>🎵 Music</span><span>🤖 Assistant</span><span>🔦 Nightshift</span><span>🎨 Paint</span></div>' +
           '<div class="changelog"><h4>Changelog</h4><ul>' +
-          '<li><strong>1.6.0</strong> — +10 arcade games, high scores; Profile, Unix terminal, panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
+          '<li><strong>1.6.2</strong> — Achievements, backup, tools, 2P games (WASD vs Arrows); +10 arcade, high scores; Profile, Unix terminal, panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
           '<li><strong>1.5.0</strong> — Generative music studio, mobile polish</li>' +
           '<li><strong>1.4.x</strong> — Video, To-Do, Markdown, Solitaire, clipboard</li>' +
           '<li><strong>1.3–1.0</strong> — Themes, games, window manager, core apps</li></ul></div>' +
@@ -1894,6 +2201,9 @@
   };
 
   function openApp(appId) {
+    if (appId === 'games') unlockAchievement('gamer');
+    if (appId === 'terminal') unlockAchievement('terminal');
+    if (appId === 'music') unlockAchievement('music');
     const app = apps[appId]; if (!app) return null;
     const win = createWindow(appId, app.title, app.icon, app.content(), app.width, app.height);
     if (app.init) setTimeout(function () { app.init(win); }, 40);
@@ -3143,6 +3453,449 @@
     }, 40);
   }
 
+
+  function openDuelPong() {
+    unlockAchievement('2p');
+    var win = createWindow('duelpong', 'Duel Pong · 2P', '🏓',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> <strong id="dp-s1">0</strong> · <strong id="dp-s2">0</strong> <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="dp-c" width="480" height="280"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="dp-start">Start · first to 7</button></div></div>', 520, 400);
+    setTimeout(function () {
+      var c = win.el.querySelector('#dp-c'), ctx = c.getContext('2d'), W=480, H=280;
+      var p1, p2, ball, s1=0, s2=0, run=false, raf, keys={};
+      function resetBall(dir){ ball={x:W/2,y:H/2,vx:dir*4,vy:(Math.random()-0.5)*3}; }
+      function start(){ p1={y:H/2-30}; p2={y:H/2-30}; s1=s2=0; win.el.querySelector('#dp-s1').textContent='0'; win.el.querySelector('#dp-s2').textContent='0'; resetBall(1); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function loop(){
+        if(!run)return;
+        if(keys['w']||keys['W']) p1.y=Math.max(0,p1.y-5);
+        if(keys['s']||keys['S']) p1.y=Math.min(H-60,p1.y+5);
+        if(keys['ArrowUp']) p2.y=Math.max(0,p2.y-5);
+        if(keys['ArrowDown']) p2.y=Math.min(H-60,p2.y+5);
+        ball.x+=ball.vx; ball.y+=ball.vy;
+        if(ball.y<6||ball.y>H-6) ball.vy*=-1;
+        if(ball.x<22&&ball.y>p1.y&&ball.y<p1.y+60){ ball.vx=Math.abs(ball.vx)+0.3; ball.vy+=(ball.y-(p1.y+30))*0.08; }
+        if(ball.x>W-22&&ball.y>p2.y&&ball.y<p2.y+60){ ball.vx=-Math.abs(ball.vx)-0.3; ball.vy+=(ball.y-(p2.y+30))*0.08; }
+        if(ball.x<0){ s2++; win.el.querySelector('#dp-s2').textContent=s2; resetBall(1); if(s2>=7){run=false;showToast('P2 wins!');} }
+        if(ball.x>W){ s1++; win.el.querySelector('#dp-s1').textContent=s1; resetBall(-1); if(s1>=7){run=false;showToast('P1 wins!');} }
+        ctx.fillStyle='#0a0a14'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#00d4ff'; ctx.fillRect(8,p1.y,10,60);
+        ctx.fillStyle='#ff4466'; ctx.fillRect(W-18,p2.y,10,60);
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ball.x,ball.y,6,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#dp-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(['ArrowUp','ArrowDown'].indexOf(e.key)>=0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openTron() {
+    unlockAchievement('2p');
+    var win = createWindow('tron', 'Light Cycles · 2P', '🏍️',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> · <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="tr-c" width="400" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="tr-start">Start</button></div></div>', 440, 520);
+    setTimeout(function () {
+      var c=win.el.querySelector('#tr-c'), ctx=c.getContext('2d'), N=40, SZ=10, grid, a, b, run=false, raf, keys={};
+      function cell(p){ return grid[p.y*N+p.x]; }
+      function set(p,v){ grid[p.y*N+p.x]=v; }
+      function reset(){
+        grid=new Array(N*N).fill(0);
+        a={x:5,y:20,dx:1,dy:0,alive:true}; b={x:34,y:20,dx:-1,dy:0,alive:true};
+        set(a,1); set(b,2); run=true; if(raf)cancelAnimationFrame(raf); loop();
+      }
+      function loop(){
+        if(!run)return;
+        if((keys['w']||keys['W'])&&a.dy===0){a.dx=0;a.dy=-1;}
+        if((keys['s']||keys['S'])&&a.dy===0){a.dx=0;a.dy=1;}
+        if((keys['a']||keys['A'])&&a.dx===0){a.dx=-1;a.dy=0;}
+        if((keys['d']||keys['D'])&&a.dx===0){a.dx=1;a.dy=0;}
+        if(keys['ArrowUp']&&b.dy===0){b.dx=0;b.dy=-1;}
+        if(keys['ArrowDown']&&b.dy===0){b.dx=0;b.dy=1;}
+        if(keys['ArrowLeft']&&b.dx===0){b.dx=-1;b.dy=0;}
+        if(keys['ArrowRight']&&b.dx===0){b.dx=1;b.dy=0;}
+        function step(p,id){
+          if(!p.alive)return;
+          p.x+=p.dx; p.y+=p.dy;
+          if(p.x<0||p.x>=N||p.y<0||p.y>=N||cell(p)){ p.alive=false; return; }
+          set(p,id);
+        }
+        step(a,1); step(b,2);
+        if(a.x===b.x&&a.y===b.y){ a.alive=b.alive=false; }
+        if(!a.alive||!b.alive){
+          run=false;
+          if(!a.alive&&!b.alive) showToast('Draw!');
+          else if(!a.alive) showToast('P2 wins!');
+          else showToast('P1 wins!');
+        }
+        ctx.fillStyle='#050510'; ctx.fillRect(0,0,400,400);
+        for(var i=0;i<N*N;i++){
+          if(!grid[i])continue;
+          ctx.fillStyle=grid[i]===1?'#00d4ff':'#ff4466';
+          ctx.fillRect((i%N)*SZ,(i/N|0)*SZ,SZ-1,SZ-1);
+        }
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#tr-start').addEventListener('click', reset);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openSoccer() {
+    unlockAchievement('2p');
+    var win = createWindow('soccer', 'Footy · 2P', '⚽',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> <strong id="sc-s1">0</strong> · <strong id="sc-s2">0</strong> <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="sc-c" width="480" height="280"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="sc-start">Start · first to 5</button></div></div>', 520, 400);
+    setTimeout(function () {
+      var c=win.el.querySelector('#sc-c'), ctx=c.getContext('2d'), W=480, H=280;
+      var p1, p2, ball, s1=0, s2=0, run=false, raf, keys={};
+      function reset(){ p1={x:80,y:H/2}; p2={x:W-80,y:H/2}; ball={x:W/2,y:H/2,vx:0,vy:0}; }
+      function start(){ s1=s2=0; win.el.querySelector('#sc-s1').textContent='0'; win.el.querySelector('#sc-s2').textContent='0'; reset(); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function move(p, up,down,left,right){
+        if(keys[up]) p.y-=3; if(keys[down]) p.y+=3; if(keys[left]) p.x-=3; if(keys[right]) p.x+=3;
+        p.x=Math.max(20,Math.min(W-20,p.x)); p.y=Math.max(20,Math.min(H-20,p.y));
+      }
+      function kick(p){
+        var dx=ball.x-p.x, dy=ball.y-p.y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<28){ ball.vx+=dx/d*2.5; ball.vy+=dy/d*2.5; }
+      }
+      function loop(){
+        if(!run)return;
+        move(p1,'w','s','a','d'); move(p1,'W','S','A','D');
+        move(p2,'ArrowUp','ArrowDown','ArrowLeft','ArrowRight');
+        kick(p1); kick(p2);
+        ball.x+=ball.vx; ball.y+=ball.vy; ball.vx*=0.99; ball.vy*=0.99;
+        if(ball.y<12||ball.y>H-12) ball.vy*=-1;
+        if(ball.x<8){ if(ball.y>H/2-40&&ball.y<H/2+40){ s2++; win.el.querySelector('#sc-s2').textContent=s2; reset(); if(s2>=5){run=false;showToast('P2 wins!');} } else ball.vx*=-1; }
+        if(ball.x>W-8){ if(ball.y>H/2-40&&ball.y<H/2+40){ s1++; win.el.querySelector('#sc-s1').textContent=s1; reset(); if(s1>=5){run=false;showToast('P1 wins!');} } else ball.vx*=-1; }
+        ctx.fillStyle='#1a5c2a'; ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle='#fff8'; ctx.strokeRect(4,4,W-8,H-8); ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+        ctx.fillStyle='#fff3'; ctx.fillRect(0,H/2-40,8,80); ctx.fillRect(W-8,H/2-40,8,80);
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(p1.x,p1.y,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff4466'; ctx.beginPath(); ctx.arc(p2.x,p2.y,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ball.x,ball.y,8,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#sc-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openTankDuel() {
+    unlockAchievement('2p');
+    var win = createWindow('tankduel', 'Tank Duel · 2P', '🎖️',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD+F</span> <strong id="td-s1">0</strong> · <strong id="td-s2">0</strong> <span style="color:#ff4466">P2 Arrows+.</span></div>' +
+      '<canvas id="td-c" width="440" height="320"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="td-start">Start · first to 5</button><span class="race-help">F / . to fire</span></div></div>', 480, 440);
+    setTimeout(function () {
+      var c=win.el.querySelector('#td-c'), ctx=c.getContext('2d'), W=440, H=320;
+      var t1, t2, b1, b2, s1=0, s2=0, run=false, raf, keys={};
+      function reset(){ t1={x:60,y:H/2,a:0}; t2={x:W-60,y:H/2,a:Math.PI}; b1=null; b2=null; }
+      function start(){ s1=s2=0; win.el.querySelector('#td-s1').textContent='0'; win.el.querySelector('#td-s2').textContent='0'; reset(); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function drive(t, left,right,up, fireKey, bulletRef, setBullet){
+        if(keys[left]) t.a-=0.06; if(keys[right]) t.a+=0.06;
+        if(keys[up]){ t.x+=Math.cos(t.a)*2.2; t.y+=Math.sin(t.a)*2.2; }
+        t.x=Math.max(15,Math.min(W-15,t.x)); t.y=Math.max(15,Math.min(H-15,t.y));
+        if(keys[fireKey] && !bulletRef){
+          setBullet({x:t.x+Math.cos(t.a)*18,y:t.y+Math.sin(t.a)*18,vx:Math.cos(t.a)*5,vy:Math.sin(t.a)*5});
+          sfx('click');
+        }
+      }
+      function loop(){
+        if(!run)return;
+        drive(t1,'a','d','w','f',b1,function(b){b1=b;});
+        drive(t1,'A','D','W','F',b1,function(b){b1=b;});
+        drive(t2,'ArrowLeft','ArrowRight','ArrowUp','.',b2,function(b){b2=b;});
+        function stepB(b, target, onHit){
+          if(!b)return null;
+          b.x+=b.vx; b.y+=b.vy;
+          if(b.x<0||b.x>W||b.y<0||b.y>H) return null;
+          var dx=b.x-target.x, dy=b.y-target.y;
+          if(dx*dx+dy*dy<18*18){ onHit(); return null; }
+          return b;
+        }
+        b1=stepB(b1,t2,function(){ s1++; win.el.querySelector('#td-s1').textContent=s1; reset(); if(s1>=5){run=false;showToast('P1 wins!');} });
+        b2=stepB(b2,t1,function(){ s2++; win.el.querySelector('#td-s2').textContent=s2; reset(); if(s2>=5){run=false;showToast('P2 wins!');} });
+        ctx.fillStyle='#1a2030'; ctx.fillRect(0,0,W,H);
+        function drawT(t,col){ ctx.save(); ctx.translate(t.x,t.y); ctx.rotate(t.a); ctx.fillStyle=col; ctx.fillRect(-12,-10,24,20); ctx.fillRect(8,-3,14,6); ctx.restore(); }
+        drawT(t1,'#00d4ff'); drawT(t2,'#ff4466');
+        if(b1){ ctx.fillStyle='#ffe066'; ctx.fillRect(b1.x-2,b1.y-2,4,4); }
+        if(b2){ ctx.fillStyle='#ffe066'; ctx.fillRect(b2.x-2,b2.y-2,4,4); }
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#td-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openSumo() {
+    unlockAchievement('2p');
+    var win = createWindow('sumo', 'Sumo Push · 2P', '🤼',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> · <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="su-c" width="360" height="360"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="su-start">Start</button></div></div>', 400, 480);
+    setTimeout(function () {
+      var c=win.el.querySelector('#su-c'), ctx=c.getContext('2d'), W=360, CX=180, CY=180, R=140;
+      var p1, p2, run=false, raf, keys={};
+      function reset(){ p1={x:CX-40,y:CY,vx:0,vy:0}; p2={x:CX+40,y:CY,vx:0,vy:0}; run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function accel(p,u,d,l,r){
+        if(keys[u]) p.vy-=0.25; if(keys[d]) p.vy+=0.25; if(keys[l]) p.vx-=0.25; if(keys[r]) p.vx+=0.25;
+      }
+      function loop(){
+        if(!run)return;
+        accel(p1,'w','s','a','d'); accel(p1,'W','S','A','D');
+        accel(p2,'ArrowUp','ArrowDown','ArrowLeft','ArrowRight');
+        p1.vx*=0.96; p1.vy*=0.96; p2.vx*=0.96; p2.vy*=0.96;
+        p1.x+=p1.vx; p1.y+=p1.vy; p2.x+=p2.vx; p2.y+=p2.vy;
+        var dx=p2.x-p1.x, dy=p2.y-p1.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+        if(d<36){
+          var push=2.5; p1.vx-=dx/d*push; p1.vy-=dy/d*push; p2.vx+=dx/d*push; p2.vy+=dy/d*push;
+        }
+        function out(p){ return (p.x-CX)*(p.x-CX)+(p.y-CY)*(p.y-CY) > R*R; }
+        if(out(p1)||out(p2)){
+          run=false;
+          if(out(p1)&&out(p2)) showToast('Draw!');
+          else if(out(p1)) showToast('P2 wins!');
+          else showToast('P1 wins!');
+        }
+        ctx.fillStyle='#1a1520'; ctx.fillRect(0,0,W,W);
+        ctx.strokeStyle='#c9a227'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(CX,CY,R,0,Math.PI*2); ctx.stroke();
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(p1.x,p1.y,16,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff4466'; ctx.beginPath(); ctx.arc(p2.x,p2.y,16,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#su-start').addEventListener('click', reset);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openCombat() {
+    unlockAchievement('2p');
+    var win = createWindow('combat', 'Laser Duel · 2P', '🔫',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD+F</span> <strong id="cd-s1">0</strong> · <strong id="cd-s2">0</strong> <span style="color:#ff4466">P2 Arrows+.</span></div>' +
+      '<canvas id="cd-c" width="420" height="320"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="cd-start">Start · first to 5</button></div></div>', 460, 440);
+    setTimeout(function () {
+      var c=win.el.querySelector('#cd-c'), ctx=c.getContext('2d'), W=420, H=320;
+      var p1, p2, bullets, s1=0, s2=0, run=false, raf, keys={};
+      function reset(){ p1={x:50,y:H/2}; p2={x:W-50,y:H/2}; bullets=[]; }
+      function start(){ s1=s2=0; win.el.querySelector('#cd-s1').textContent='0'; win.el.querySelector('#cd-s2').textContent='0'; reset(); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function move(p,u,d,l,r){
+        if(keys[u])p.y-=3; if(keys[d])p.y+=3; if(keys[l])p.x-=3; if(keys[r])p.x+=3;
+        p.x=Math.max(12,Math.min(W-12,p.x)); p.y=Math.max(12,Math.min(H-12,p.y));
+      }
+      function loop(){
+        if(!run)return;
+        move(p1,'w','s','a','d'); move(p1,'W','S','A','D');
+        move(p2,'ArrowUp','ArrowDown','ArrowLeft','ArrowRight');
+        if((keys['f']||keys['F'])&&!p1.cd){ bullets.push({x:p1.x,y:p1.y,vx:5,vy:0,owner:1}); p1.cd=20; }
+        if(keys['.']&&!p2.cd){ bullets.push({x:p2.x,y:p2.y,vx:-5,vy:0,owner:2}); p2.cd=20; }
+        if(p1.cd>0)p1.cd--; if(p2.cd>0)p2.cd--;
+        bullets.forEach(function(b){ b.x+=b.vx; b.y+=b.vy; });
+        bullets=bullets.filter(function(b){
+          if(b.x<0||b.x>W) return false;
+          var t=b.owner===1?p2:p1;
+          if(Math.abs(b.x-t.x)<14&&Math.abs(b.y-t.y)<14){
+            if(b.owner===1){ s1++; win.el.querySelector('#cd-s1').textContent=s1; } else { s2++; win.el.querySelector('#cd-s2').textContent=s2; }
+            reset(); if(s1>=5){run=false;showToast('P1 wins!');} if(s2>=5){run=false;showToast('P2 wins!');}
+            return false;
+          }
+          return true;
+        });
+        ctx.fillStyle='#0a1020'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(p1.x,p1.y,12,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff4466'; ctx.beginPath(); ctx.arc(p2.x,p2.y,12,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ffe066'; bullets.forEach(function(b){ ctx.fillRect(b.x-3,b.y-2,6,4); });
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#cd-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openDualRace() {
+    unlockAchievement('2p');
+    var win = createWindow('dualrace', 'Dual Race · 2P', '🏁',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> Lap <strong id="dr-l1">0</strong> · Lap <strong id="dr-l2">0</strong> <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="dr-c" width="400" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="dr-start">Start · 3 laps</button></div></div>', 440, 520);
+    setTimeout(function () {
+      var c=win.el.querySelector('#dr-c'), ctx=c.getContext('2d'), W=400, CX=200, CY=200, ROUT=170, RIN=100;
+      var c1, c2, run=false, raf, keys={}, l1=0, l2=0, last1=0, last2=0;
+      function ang(p){ return Math.atan2(p.y-CY,p.x-CX); }
+      function reset(){
+        c1={x:CX,y:CY+(ROUT+RIN)/2-8,a:-Math.PI/2,spd:0}; c2={x:CX,y:CY+(ROUT+RIN)/2+8,a:-Math.PI/2,spd:0};
+        l1=l2=0; last1=last2=ang(c1); win.el.querySelector('#dr-l1').textContent='0'; win.el.querySelector('#dr-l2').textContent='0';
+        run=true; if(raf)cancelAnimationFrame(raf); loop();
+      }
+      function drive(car, left,right,up,down){
+        if(keys[left]) car.a-=0.05; if(keys[right]) car.a+=0.05;
+        if(keys[up]) car.spd=Math.min(3.5,car.spd+0.1); else if(keys[down]) car.spd=Math.max(-1,car.spd-0.1); else car.spd*=0.98;
+        car.x+=Math.cos(car.a)*car.spd; car.y+=Math.sin(car.a)*car.spd;
+        var d=Math.sqrt((car.x-CX)*(car.x-CX)+(car.y-CY)*(car.y-CY));
+        if(d>ROUT||d<RIN) car.spd*=0.9;
+      }
+      function checkLap(car, last, setLast, getL, setL, id){
+        var a=ang(car); var la=last;
+        // crossed finish (bottom, angle near PI/2 area going CCW... simplify: when crossing from right half to left through bottom)
+        if(la < -1 && a > 1) { /* skip wrap noise */ }
+        var crossed = (la > 1.2 && a < -1.2);
+        setLast(a);
+        if(crossed){ var n=getL()+1; setL(n); win.el.querySelector(id).textContent=n; if(n>=3){ run=false; showToast((id==='#dr-l1'?'P1':'P2')+' wins!'); } }
+        return a;
+      }
+      function loop(){
+        if(!run)return;
+        drive(c1,'a','d','w','s'); drive(c1,'A','D','W','S');
+        drive(c2,'ArrowLeft','ArrowRight','ArrowUp','ArrowDown');
+        last1=checkLap(c1,last1,function(v){last1=v;},function(){return l1;},function(v){l1=v;},'#dr-l1');
+        last2=checkLap(c2,last2,function(v){last2=v;},function(){return l2;},function(v){l2=v;},'#dr-l2');
+        ctx.fillStyle='#1a7a3a'; ctx.fillRect(0,0,W,W);
+        ctx.beginPath(); ctx.arc(CX,CY,ROUT,0,Math.PI*2); ctx.fillStyle='#2a2a32'; ctx.fill();
+        ctx.beginPath(); ctx.arc(CX,CY,RIN,0,Math.PI*2); ctx.fillStyle='#1a7a3a'; ctx.fill();
+        ctx.strokeStyle='#fff'; ctx.beginPath(); ctx.moveTo(CX-6,CY+RIN); ctx.lineTo(CX-6,CY+ROUT); ctx.stroke();
+        function drawC(car,col){ ctx.save(); ctx.translate(car.x,car.y); ctx.rotate(car.a); ctx.fillStyle=col; ctx.fillRect(-8,-5,16,10); ctx.restore(); }
+        drawC(c1,'#00d4ff'); drawC(c2,'#ff4466');
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#dr-start').addEventListener('click', reset);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openVolley() {
+    unlockAchievement('2p');
+    var win = createWindow('volley', 'Volley · 2P', '🏐',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> <strong id="vo-s1">0</strong> · <strong id="vo-s2">0</strong> <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="vo-c" width="480" height="260"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="vo-start">Start · first to 5</button></div></div>', 520, 380);
+    setTimeout(function () {
+      var c=win.el.querySelector('#vo-c'), ctx=c.getContext('2d'), W=480, H=260;
+      var p1, p2, ball, s1=0, s2=0, run=false, raf, keys={};
+      function reset(dir){ p1={x:80,y:H-30}; p2={x:W-80,y:H-30}; ball={x:W/2,y:80,vx:dir*2,vy:0}; }
+      function start(){ s1=s2=0; win.el.querySelector('#vo-s1').textContent='0'; win.el.querySelector('#vo-s2').textContent='0'; reset(1); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function loop(){
+        if(!run)return;
+        if(keys['a']||keys['A']) p1.x-=4; if(keys['d']||keys['D']) p1.x+=4;
+        if(keys['w']||keys['W']) p1.y-=4; if(keys['s']||keys['S']) p1.y+=4;
+        if(keys['ArrowLeft']) p2.x-=4; if(keys['ArrowRight']) p2.x+=4;
+        if(keys['ArrowUp']) p2.y-=4; if(keys['ArrowDown']) p2.y+=4;
+        p1.x=Math.max(20,Math.min(W/2-30,p1.x)); p1.y=Math.max(H/2,Math.min(H-20,p1.y));
+        p2.x=Math.max(W/2+30,Math.min(W-20,p2.x)); p2.y=Math.max(H/2,Math.min(H-20,p2.y));
+        ball.vy+=0.2; ball.x+=ball.vx; ball.y+=ball.vy;
+        if(ball.x<10||ball.x>W-10) ball.vx*=-1;
+        if(ball.y>H-10){ if(ball.x<W/2){ s2++; win.el.querySelector('#vo-s2').textContent=s2; } else { s1++; win.el.querySelector('#vo-s1').textContent=s1; } reset(ball.x<W/2?1:-1); if(s1>=5||s2>=5){run=false;showToast((s1>=5?'P1':'P2')+' wins!');} }
+        function hit(p){ var dx=ball.x-p.x, dy=ball.y-p.y; if(dx*dx+dy*dy<400){ ball.vy=-Math.abs(ball.vy)-1; ball.vx+=dx*0.15; } }
+        hit(p1); hit(p2);
+        // net
+        if(Math.abs(ball.x-W/2)<6 && ball.y>H/2) ball.vx*=-1;
+        ctx.fillStyle='#e8c96a'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#4a90d9'; ctx.fillRect(0,0,W,H/2);
+        ctx.fillStyle='#ccc'; ctx.fillRect(W/2-3,H/2,6,H/2);
+        ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.arc(p1.x,p1.y,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#ff4466'; ctx.beginPath(); ctx.arc(p2.x,p2.y,14,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ball.x,ball.y,9,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#vo-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
+  function openDuelSnake() {
+    unlockAchievement('2p');
+    var win = createWindow('duelsnake', 'Snake Duel · 2P', '🐍',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> · <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="ds-c" width="400" height="400"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="ds-start">Start</button></div></div>', 440, 520);
+    setTimeout(function () {
+      var c=win.el.querySelector('#ds-c'), ctx=c.getContext('2d'), N=20, SZ=20;
+      var s1, s2, food, run=false, timer, keys={}, dir1, dir2, next1, next2;
+      function reset(){
+        s1=[{x:4,y:10},{x:3,y:10}]; s2=[{x:15,y:10},{x:16,y:10}];
+        dir1={x:1,y:0}; dir2={x:-1,y:0}; next1=dir1; next2=dir2;
+        food={x:10,y:10}; run=true; clearInterval(timer); timer=setInterval(tick, 120);
+      }
+      function tick(){
+        if(!run)return;
+        dir1=next1; dir2=next2;
+        var h1={x:s1[0].x+dir1.x,y:s1[0].y+dir1.y};
+        var h2={x:s2[0].x+dir2.x,y:s2[0].y+dir2.y};
+        function dead(h, self, other){
+          if(h.x<0||h.x>=N||h.y<0||h.y>=N) return true;
+          for(var i=0;i<self.length;i++) if(self[i].x===h.x&&self[i].y===h.y) return true;
+          for(var j=0;j<other.length;j++) if(other[j].x===h.x&&other[j].y===h.y) return true;
+          return false;
+        }
+        var d1=dead(h1,s1,s2), d2=dead(h2,s2,s1);
+        if(h1.x===h2.x&&h1.y===h2.y) d1=d2=true;
+        if(d1||d2){ run=false; clearInterval(timer); if(d1&&d2)showToast('Draw!'); else if(d1)showToast('P2 wins!'); else showToast('P1 wins!'); return; }
+        s1.unshift(h1); s2.unshift(h2);
+        if(h1.x===food.x&&h1.y===food.y){ food={x:(Math.random()*N)|0,y:(Math.random()*N)|0}; } else s1.pop();
+        if(h2.x===food.x&&h2.y===food.y){ food={x:(Math.random()*N)|0,y:(Math.random()*N)|0}; } else s2.pop();
+        ctx.fillStyle='#0a0a14'; ctx.fillRect(0,0,400,400);
+        ctx.fillStyle='#00d4ff'; s1.forEach(function(p){ ctx.fillRect(p.x*SZ,p.y*SZ,SZ-1,SZ-1); });
+        ctx.fillStyle='#ff4466'; s2.forEach(function(p){ ctx.fillRect(p.x*SZ,p.y*SZ,SZ-1,SZ-1); });
+        ctx.fillStyle='#ffe066'; ctx.fillRect(food.x*SZ,food.y*SZ,SZ-1,SZ-1);
+      }
+      win.el.querySelector('#ds-start').addEventListener('click', reset);
+      document.addEventListener('keydown', function(e){
+        keys[e.key]=true;
+        if((e.key==='w'||e.key==='W')&&dir1.y===0) next1={x:0,y:-1};
+        if((e.key==='s'||e.key==='S')&&dir1.y===0) next1={x:0,y:1};
+        if((e.key==='a'||e.key==='A')&&dir1.x===0) next1={x:-1,y:0};
+        if((e.key==='d'||e.key==='D')&&dir1.x===0) next1={x:1,y:0};
+        if(e.key==='ArrowUp'&&dir2.y===0) next2={x:0,y:-1};
+        if(e.key==='ArrowDown'&&dir2.y===0) next2={x:0,y:1};
+        if(e.key==='ArrowLeft'&&dir2.x===0) next2={x:-1,y:0};
+        if(e.key==='ArrowRight'&&dir2.x===0) next2={x:1,y:0};
+        if(e.key.indexOf('Arrow')===0) e.preventDefault();
+      });
+    }, 40);
+  }
+
+  function openHockey2P() {
+    unlockAchievement('2p');
+    var win = createWindow('hockey2', 'Hockey 2P', '🏒',
+      '<div class="ag-body"><div class="tetris-hud"><span style="color:#00d4ff">P1 WASD</span> <strong id="h2-s1">0</strong> · <strong id="h2-s2">0</strong> <span style="color:#ff4466">P2 Arrows</span></div>' +
+      '<canvas id="h2-c" width="400" height="280"></canvas>' +
+      '<div class="game-btn-row"><button type="button" id="h2-start">Start · first to 7</button></div></div>', 440, 400);
+    setTimeout(function () {
+      var c=win.el.querySelector('#h2-c'), ctx=c.getContext('2d'), W=400, H=280;
+      var p1, p2, puck, s1=0, s2=0, run=false, raf, keys={};
+      function resetPuck(){ puck={x:W/2,y:H/2,vx:(Math.random()>0.5?3:-3),vy:(Math.random()-0.5)*2}; }
+      function start(){ s1=s2=0; win.el.querySelector('#h2-s1').textContent='0'; win.el.querySelector('#h2-s2').textContent='0'; p1={x:30,y:H/2-25}; p2={x:W-40,y:H/2-25}; resetPuck(); run=true; if(raf)cancelAnimationFrame(raf); loop(); }
+      function loop(){
+        if(!run)return;
+        if(keys['w']||keys['W']) p1.y=Math.max(0,p1.y-5); if(keys['s']||keys['S']) p1.y=Math.min(H-50,p1.y+5);
+        if(keys['ArrowUp']) p2.y=Math.max(0,p2.y-5); if(keys['ArrowDown']) p2.y=Math.min(H-50,p2.y+5);
+        puck.x+=puck.vx; puck.y+=puck.vy;
+        if(puck.y<8||puck.y>H-8) puck.vy*=-1;
+        if(puck.x<p1.x+14&&puck.x>p1.x&&puck.y>p1.y&&puck.y<p1.y+50){ puck.vx=Math.abs(puck.vx)+0.2; puck.vy+=(puck.y-(p1.y+25))*0.1; }
+        if(puck.x>p2.x-4&&puck.x<p2.x+14&&puck.y>p2.y&&puck.y<p2.y+50){ puck.vx=-Math.abs(puck.vx)-0.2; puck.vy+=(puck.y-(p2.y+25))*0.1; }
+        if(puck.x<0){ s2++; win.el.querySelector('#h2-s2').textContent=s2; resetPuck(); if(s2>=7){run=false;showToast('P2 wins!');} }
+        if(puck.x>W){ s1++; win.el.querySelector('#h2-s1').textContent=s1; resetPuck(); if(s1>=7){run=false;showToast('P1 wins!');} }
+        ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle='#334'; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke();
+        ctx.fillStyle='#00d4ff'; ctx.fillRect(p1.x,p1.y,12,50);
+        ctx.fillStyle='#ff4466'; ctx.fillRect(p2.x,p2.y,12,50);
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(puck.x,puck.y,8,0,Math.PI*2); ctx.fill();
+        raf=requestAnimationFrame(loop);
+      }
+      win.el.querySelector('#h2-start').addEventListener('click', start);
+      document.addEventListener('keydown', function(e){ keys[e.key]=true; if(e.key.indexOf('Arrow')===0)e.preventDefault(); });
+      document.addEventListener('keyup', function(e){ keys[e.key]=false; });
+    }, 40);
+  }
+
   function openSnake() {
     const win = createWindow('snake-game', 'Snake', '🐍',
       '<div class="snake-container"><div class="snake-hud"><span>Score: <strong id="snake-score">0</strong></span><span>Best: <strong id="snake-best">0</strong></span></div>' +
@@ -3540,7 +4293,7 @@
     var map = {
       browser: 'browser', proxy: 'browser', music: 'music', games: 'games', game: 'games',
       terminal: 'terminal', shell: 'terminal', notepad: 'notepad', calc: 'calculator', calculator: 'calculator',
-      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', stopwatch: 'stopwatch', timer: 'stopwatch', help: 'assistant',
+      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', stopwatch: 'stopwatch', timer: 'stopwatch', passgen: 'passgen', password: 'passgen', converter: 'converter', units: 'converter', pomodoro: 'pomodoro', focus: 'pomodoro', dice: 'dice', help: 'assistant',
       stickies: 'stickies', sticky: 'stickies', notes: 'stickies', tasks: 'taskmgr', taskmgr: 'taskmgr',
       task: 'taskmgr', weather: 'weather', video: 'video', todo: 'todo', markdown: 'markdown', snake: 'games', pong: 'games', mines: 'games', c4: 'games', connect: 'games'
     };
@@ -3705,11 +4458,28 @@
     { id: 'jumper', icon: '🦘', label: 'Play Sky Jumper', type: 'game', fn: function () { openJumper(); } },
     { id: 'hockey', icon: '🏒', label: 'Play Air Hockey', type: 'game', fn: function () { openHockey(); } },
     { id: 'lights', icon: '💡', label: 'Play Lights Out', type: 'game', fn: function () { openLightsOut(); } },
+    { id: 'duelpong', icon: '🏓', label: 'Play Duel Pong (2P)', type: 'game', fn: function () { openDuelPong(); } },
+    { id: 'tron', icon: '🏍️', label: 'Play Light Cycles (2P)', type: 'game', fn: function () { openTron(); } },
+    { id: 'soccer', icon: '⚽', label: 'Play Footy (2P)', type: 'game', fn: function () { openSoccer(); } },
+    { id: 'tankduel', icon: '🎖️', label: 'Play Tank Duel (2P)', type: 'game', fn: function () { openTankDuel(); } },
+    { id: 'sumo', icon: '🤼', label: 'Play Sumo Push (2P)', type: 'game', fn: function () { openSumo(); } },
+    { id: 'combat', icon: '🔫', label: 'Play Laser Duel (2P)', type: 'game', fn: function () { openCombat(); } },
+    { id: 'dualrace', icon: '🏁', label: 'Play Dual Race (2P)', type: 'game', fn: function () { openDualRace(); } },
+    { id: 'volley', icon: '🏐', label: 'Play Volley (2P)', type: 'game', fn: function () { openVolley(); } },
+    { id: 'duelsnake', icon: '🐍', label: 'Play Snake Duel (2P)', type: 'game', fn: function () { openDuelSnake(); } },
+    { id: 'hockey2', icon: '🏒', label: 'Play Hockey 2P', type: 'game', fn: function () { openHockey2P(); } },
     { id: 'scores', icon: '🏆', label: 'High Scores', type: 'action', fn: function () { openHighScores(); } },
     { id: 'assistant', icon: '🤖', label: 'Orbit Assistant', type: 'app', fn: function () { openApp('assistant'); } },
     { id: 'clockapp', icon: '🕐', label: 'Clock', type: 'app', fn: function () { openApp('clockapp'); } },
     { id: 'gallery', icon: '🖼️', label: 'Gallery', type: 'app', fn: function () { openApp('gallery'); } },
     { id: 'stopwatch', icon: '⏱️', label: 'Stopwatch', type: 'app', fn: function () { openApp('stopwatch'); } },
+    { id: 'passgen', icon: '🔐', label: 'Password Generator', type: 'app', fn: function () { openApp('passgen'); } },
+    { id: 'converter', icon: '📐', label: 'Unit Converter', type: 'app', fn: function () { openApp('converter'); } },
+    { id: 'pomodoro', icon: '🍅', label: 'Pomodoro', type: 'app', fn: function () { openApp('pomodoro'); } },
+    { id: 'dice', icon: '🎲', label: 'Dice & Coin', type: 'app', fn: function () { openApp('dice'); } },
+    { id: 'achievements', icon: '🏅', label: 'Achievements', type: 'action', fn: function () { openAchievements(); } },
+    { id: 'shortcuts', icon: '⌨️', label: 'Keyboard shortcuts', type: 'action', fn: function () { openShortcutsHelp(); } },
+    { id: 'backup', icon: '💾', label: 'Export backup', type: 'action', fn: function () { exportBackup(); } },
     { id: 'sticky', icon: '📌', label: 'Add desktop sticky', type: 'action', fn: function () { addFloatSticky(); } },
     { id: 'run', icon: '▷', label: 'Run dialog', type: 'action', fn: function () { openRunDialog(); } },
     { id: 'lock', icon: '🔒', label: 'Lock screen', type: 'action', fn: function () { lockScreen(); } },
