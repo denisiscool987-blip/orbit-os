@@ -1,6 +1,14 @@
-# OrbitOS v1.6.2 — Utility Pack
+# OrbitOS v1.6.4 — Utility Pack + Genesis
 
 Pure HTML/CSS/JS desktop for GitHub Pages or offline (open `index.html`).
+
+## New in 1.6.4
+- **Orbit Genesis** — Living world simulation (slow)
+  - Each human lives ~2 real hours at 1× speed
+  - IQ evolves very gradually over a full lifetime
+  - Plants & trees grow slowly; forage, build, reproduce, die
+  - Click a human to see remaining life time
+  - Speed 1×–16×, pause, plant seeds, reset
 
 ## New in 1.6.2
 - **Achievements** (10) — Settings or Ctrl+K

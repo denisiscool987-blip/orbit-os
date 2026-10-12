@@ -174,7 +174,7 @@
   }
   function exportBackup() {
     store = loadStore();
-    var data = JSON.stringify({ orbitos: true, version: '1.6.2', exported: new Date().toISOString(), data: store }, null, 2);
+    var data = JSON.stringify({ orbitos: true, version: '1.6.4', exported: new Date().toISOString(), data: store }, null, 2);
     var blob = new Blob([data], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -304,7 +304,8 @@
         if (s.height) win.el.style.height = s.height;
         if (s.left) win.el.style.left = s.left;
         if (s.top) win.el.style.top = s.top;
-        if (s.maximized) { win.maximized = true; win.el.classList.add('maximized'); }
+        if (s.maximized) { win.maximized = true; win.el.classList.add('maximized'); win.el.style.left = ''; win.el.style.top = ''; win.el.style.width = ''; win.el.style.height = ''; }
+        updateMaximizedBodyClass();
         if (s.minimized) { win.minimized = true; win.el.classList.add('minimized'); }
         updateTaskbar();
       }, 200 + i * 120);
@@ -428,6 +429,10 @@
       dragOffset.x = e.clientX - rect.left; dragOffset.y = e.clientY - rect.top;
       focusWindow(win.id);
     });
+    titlebar.addEventListener('dblclick', function (e) {
+      if (e.target.closest('.win-btn')) return;
+      toggleMaximize(win.id);
+    });
     resizeHandle.addEventListener('mousedown', function (e) {
       e.stopPropagation(); if (win.maximized) return; isResizing = true; resizeWindow = win; focusWindow(win.id);
     });
@@ -443,12 +448,18 @@
     sfx('close'); win.closed = true; win.el.remove();
     windows = windows.filter(function (w) { return w.id !== id; });
     if (activeWindowId === id) activeWindowId = null; updateTaskbar();
+    updateMaximizedBodyClass();
     saveSession();
   }
   function minimizeWindow(id) {
     const win = windows.find(function (w) { return w.id === id; }); if (!win) return;
     sfx('click'); win.minimized = true; win.el.classList.add('minimized'); win.el.classList.remove('focused');
     if (activeWindowId === id) activeWindowId = null; updateTaskbar();
+    updateMaximizedBodyClass();
+  }
+  function updateMaximizedBodyClass() {
+    var any = windows.some(function (w) { return w.maximized && !w.closed && !w.minimized; });
+    document.body.classList.toggle('has-maximized', any);
   }
   function toggleMaximize(id) {
     const win = windows.find(function (w) { return w.id === id; }); if (!win) return;
@@ -459,14 +470,20 @@
     } else {
       win.prevRect = { left: win.el.style.left, top: win.el.style.top, width: win.el.style.width, height: win.el.style.height };
       win.maximized = true; win.el.classList.add('maximized');
+      win.el.style.left = ''; win.el.style.top = ''; win.el.style.width = ''; win.el.style.height = '';
     }
+    updateMaximizedBodyClass();
   }
   function snapWindow(win, zone) {
     win.prevRect = { left: win.el.style.left, top: win.el.style.top, width: win.el.style.width, height: win.el.style.height };
     win.maximized = false; win.el.classList.remove('maximized');
-    if (zone === 'left') { win.el.style.left = '0'; win.el.style.top = '0'; win.el.style.width = '50%'; win.el.style.height = 'calc(100% - 48px)'; }
-    else if (zone === 'right') { win.el.style.left = '50%'; win.el.style.top = '0'; win.el.style.width = '50%'; win.el.style.height = 'calc(100% - 48px)'; }
-    else if (zone === 'top') { win.maximized = true; win.el.classList.add('maximized'); }
+    if (zone === 'left') { win.el.style.left = '0'; win.el.style.top = '0'; win.el.style.width = '50%'; win.el.style.height = 'calc(100% - var(--taskbar-h))'; }
+    else if (zone === 'right') { win.el.style.left = '50%'; win.el.style.top = '0'; win.el.style.width = '50%'; win.el.style.height = 'calc(100% - var(--taskbar-h))'; }
+    else if (zone === 'top') {
+      win.maximized = true; win.el.classList.add('maximized');
+      win.el.style.left = ''; win.el.style.top = ''; win.el.style.width = ''; win.el.style.height = '';
+    }
+    updateMaximizedBodyClass();
     sfx('success');
   }
   function updateTaskbar() {
@@ -545,7 +562,17 @@
       document.getElementById('alt-tab').classList.add('hidden');
       closeCommandPalette();
       closeRunDialog();
-      altTabOpen = false; return;
+      altTabOpen = false;
+      // Restore maximized window with Escape
+      if (activeWindowId) {
+        var aw = windows.find(function (w) { return w.id === activeWindowId; });
+        if (aw && aw.maximized) { toggleMaximize(aw.id); return; }
+      }
+      return;
+    }
+    if ((e.key === 'F11' || (e.metaKey && e.ctrlKey && (e.key === 'f' || e.key === 'F'))) && activeWindowId && !e.target.matches('input, textarea')) {
+      e.preventDefault();
+      toggleMaximize(activeWindowId);
     }
     if (e.ctrlKey && (e.key === 'w' || e.key === 'W') && activeWindowId && !e.target.matches('input, textarea')) {
       e.preventDefault(); closeWindow(activeWindowId);
@@ -922,7 +949,8 @@
           '<div class="game-card" data-game="mines"><div class="game-emoji">💣</div><h4>Minesweeper</h4><p>Clear the field</p></div>' +
           '<div class="game-card" data-game="pong"><div class="game-emoji">🏓</div><h4>Pong</h4><p>Vs CPU</p></div>' +
           '<div class="game-card" data-game="c4"><div class="game-emoji">🔴</div><h4>Connect Four</h4><p>2 players</p></div>' +
-          '<div class="game-card" data-game="solitaire"><div class="game-emoji">🃏</div><h4>Solitaire</h4><p>Klondike</p></div></div>';
+          '<div class="game-card" data-game="solitaire"><div class="game-emoji">🃏</div><h4>Solitaire</h4><p>Klondike</p></div>' +
+          '<div class="game-card" data-game="genesis"><div class="game-emoji">🌍</div><h4>Orbit Genesis</h4><p>Life simulation</p></div></div>';
       },
       init: function (win) {
         win.el.querySelectorAll('.game-card').forEach(function (card) {
@@ -937,7 +965,8 @@
               sumo: openSumo, combat: openCombat, dualrace: openDualRace, volley: openVolley,
               duelsnake: openDuelSnake, hockey2: openHockey2P,
               snake: openSnake, ttt: openTTT, '2048': open2048, memory: openMemory,
-              mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire
+              mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire,
+              genesis: openGenesis
             };
             if (map[g]) map[g]();
           });
@@ -1129,7 +1158,7 @@
           neofetch: function () {
             var p = getProfile();
             return p.avatar + '  ' + p.handle + '@orbit\n' +
-              'OS: OrbitOS 1.6.2 (browser)\n' +
+              'OS: OrbitOS 1.6.4 (browser)\n' +
               'Host: GitHub Pages\n' +
               'Uptime: ' + Math.floor(performance.now() / 1000) + 's\n' +
               'Shell: orbitsh\n' +
@@ -1476,7 +1505,7 @@
           '<div class="settings-row"><span>Backup</span><button type="button" id="settings-export">Export JSON</button></div>' +
           '<div class="settings-row"><span>Restore</span><button type="button" id="settings-import">Import JSON</button><input type="file" id="settings-import-file" accept="application/json,.json" hidden></div>' +
           '<div class="settings-row"><span>Achievements</span><button type="button" id="settings-ach">View</button></div></div>' +
-          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.2</span></div>' +
+          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.4</span></div>' +
           '<div class="settings-row"><span>Restore session on boot</span><span style="color:var(--text-dim)">On</span></div>' +
           '<div class="settings-row"><span>Clear local data</span><button type="button" id="settings-clear">Clear</button></div></div></div>';
       },
@@ -2032,10 +2061,11 @@
       title: 'About OrbitOS', icon: 'ℹ️', width: 460, height: 520,
       content: function () {
         return '<div class="about-body"><div class="about-logo">🚀</div><h2>OrbitOS</h2>' +
-          '<p class="version">Version 1.6.2 — Utility Pack</p>' +
+          '<p class="version">Version 1.6.4 — Polished Games + Fullscreen</p>' +
           '<p>A complete desktop OS in pure HTML, CSS & JavaScript for GitHub Pages.</p>' +
           '<div class="about-features"><span>🪟 Windows</span><span>🎮 Games</span><span>🎵 Music</span><span>🤖 Assistant</span><span>🔦 Nightshift</span><span>🎨 Paint</span></div>' +
           '<div class="changelog"><h4>Changelog</h4><ul>' +
+          '<li><strong>1.6.4</strong> — Orbit Genesis life simulation (spawn humans, plants/trees, learn, build, reproduce, die)</li>' +
           '<li><strong>1.6.2</strong> — Achievements, backup, tools, 2P games (WASD vs Arrows); +10 arcade, high scores; Profile, Unix terminal, panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
           '<li><strong>1.5.0</strong> — Generative music studio, mobile polish</li>' +
           '<li><strong>1.4.x</strong> — Video, To-Do, Markdown, Solitaire, clipboard</li>' +
@@ -4543,6 +4573,399 @@
   function toggleFullscreen() { safeFullscreenToggle(); }
 
 
+
+  function openGenesis() {
+    const win = createWindow('genesis-game', 'Orbit Genesis · Life Sim', '🌍',
+      '<div class="genesis-wrap">' +
+      '<div class="genesis-hud">' +
+      '<span>Pop: <strong id="gen-pop">0</strong></span>' +
+      '<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +
+      '<span>Gen: <strong id="gen-gen">0</strong></span>' +
+      '<span>Trees: <strong id="gen-trees">0</strong></span>' +
+      '<span>Houses: <strong id="gen-houses">0</strong></span>' +
+      '<span>Day: <strong id="gen-day">0</strong></span>' +
+      '<span>Life: <strong>~2h</strong></span>' +
+      '</div>' +
+      '<canvas id="gen-canvas" width="720" height="420"></canvas>' +
+      '<div class="game-btn-row gen-controls">' +
+      '<button type="button" id="gen-spawn">👤 Spawn Human</button>' +
+      '<button type="button" id="gen-smart">🧠 Spawn Smart</button>' +
+      '<button type="button" id="gen-plant">🌱 Plant Seed</button>' +
+      '<button type="button" id="gen-pause">Pause</button>' +
+      '<button type="button" id="gen-speed">Speed 1x</button>' +
+      '<button type="button" id="gen-clear">Reset World</button>' +
+      '</div>' +
+      '<p class="gen-help">Slow life sim · each human lives ~2 real hours at 1x · IQ evolves gradually · click a human for stats</p>' +
+      '</div>', 760, 580);
+
+    setTimeout(function () {
+      var canvas = win.el.querySelector('#gen-canvas');
+      var ctx = canvas.getContext('2d');
+      var W = canvas.width, H = canvas.height;
+      var running = true, speed = 1, day = 0;
+      var humans = [], plants = [], trees = [], houses = [], nextId = 1, maxGen = 0;
+      var selected = null;
+      var lastTs = performance.now();
+
+      // Time scale: 1 unit of "sim second" ≈ 1 real second at speed 1x
+      // Human lifespan ≈ 2 hours = 7200 sim-seconds
+      var LIFE_SEC = 7200;
+
+      function rand(a, b) { return a + Math.random() * (b - a); }
+      function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+
+      function spawnHuman(smart) {
+        var h = {
+          id: nextId++, x: rand(40, W - 40), y: rand(40, H - 40),
+          vx: 0, vy: 0,
+          energy: 85 + rand(0, 15),
+          hunger: 15 + rand(0, 15),
+          age: 0,
+          maxAge: LIFE_SEC + rand(0, 1800), // ~2h to ~2.5h
+          intel: smart ? 40 + rand(0, 20) : 12 + rand(0, 12),
+          gender: Math.random() < 0.5 ? 'm' : 'f',
+          state: 'wander', target: null,
+          wood: 0, food: 0, gen: 0,
+          color: smart ? '#7cf' : '#fc8',
+          cool: 0, think: 0
+        };
+        humans.push(h);
+        return h;
+      }
+
+      function seedWorld() {
+        humans = []; plants = []; trees = []; houses = []; day = 0; maxGen = 0; nextId = 1; selected = null;
+        for (var i = 0; i < 14; i++) {
+          trees.push({
+            x: rand(30, W - 30), y: rand(30, H - 30),
+            size: 0.35 + rand(0, 0.55), fruit: rand(0, 2), wood: 2 + rand(0, 3), age: rand(0, 500)
+          });
+        }
+        for (var j = 0; j < 22; j++) {
+          plants.push({ x: rand(20, W - 20), y: rand(20, H - 20), stage: rand(0.15, 0.9), food: rand(0.4, 1.8) });
+        }
+        for (var k = 0; k < 3; k++) spawnHuman(false);
+        updateHud();
+      }
+
+      function nearest(list, from, pred) {
+        var best = null, bd = 1e9;
+        for (var i = 0; i < list.length; i++) {
+          if (pred && !pred(list[i])) continue;
+          var d = dist(from, list[i]);
+          if (d < bd) { bd = d; best = list[i]; }
+        }
+        return best;
+      }
+
+      function tryReproduce(a, b) {
+        if (a.cool > 0 || b.cool > 0) return;
+        if (a.gender === b.gender) return;
+        // Mature after ~12 minutes of life (720 sec)
+        if (a.age < 720 || b.age < 720) return;
+        if (a.energy < 55 || b.energy < 55) return;
+        if (a.intel < 22 || b.intel < 22) return;
+        if (dist(a, b) > 28) return;
+        var child = spawnHuman(false);
+        child.x = (a.x + b.x) / 2 + rand(-12, 12);
+        child.y = (a.y + b.y) / 2 + rand(-12, 12);
+        // Slow inheritance + small mutation
+        child.intel = Math.min(90, (a.intel + b.intel) / 2 + rand(-3, 6));
+        child.gen = Math.max(a.gen, b.gen) + 1;
+        if (child.gen > maxGen) maxGen = child.gen;
+        a.energy -= 18; b.energy -= 18;
+        a.cool = 900; b.cool = 900; // 15 min cooldown
+        a.state = 'wander'; b.state = 'wander';
+        showToast('New life · Generation ' + child.gen);
+      }
+
+      function updateHuman(h, dt) {
+        // dt is sim-seconds
+        h.age += dt;
+        // Very slow hunger / energy drain so they can live hours
+        h.hunger += 0.0012 * dt;   // ~ full hunger over ~14 min if idle
+        h.energy -= 0.00055 * dt;
+        if (h.cool > 0) h.cool -= dt;
+        if (h.hunger > 85) h.energy -= 0.0025 * dt;
+        if (h.energy <= 0 || h.age > h.maxAge) {
+          h.dead = true;
+          return;
+        }
+
+        // Extremely slow learning — meaningful IQ change over the full 2h life
+        if (h.state === 'forage' || h.state === 'build' || h.state === 'eat' || h.state === 'chop') {
+          h.intel = Math.min(100, h.intel + 0.00035 * dt);
+        } else {
+          h.intel = Math.min(100, h.intel + 0.00008 * dt);
+        }
+
+        if (!h.target || h.think <= 0) {
+          h.think = 8 + rand(0, 14); // re-decide every ~8–22 sim seconds
+          if (h.hunger > 50 && h.food > 0) {
+            h.state = 'eat';
+          } else if (h.hunger > 35) {
+            h.state = 'forage';
+            h.target = nearest(plants, h, function (p) { return p.stage > 0.45 && p.food > 0.25; }) ||
+                       nearest(trees, h, function (t) { return t.fruit > 0.4; });
+          } else if (h.wood >= 4 && h.intel > 28 && houses.length < 14) {
+            h.state = 'build';
+            h.target = { x: h.x + rand(-70, 70), y: h.y + rand(-70, 70) };
+          } else if (h.intel > 24 && h.age > 720 && h.energy > 60) {
+            h.state = 'social';
+            h.target = nearest(humans, h, function (o) {
+              return o !== h && !o.dead && o.gender !== h.gender && o.age > 720;
+            });
+          } else if (h.wood < 4 && h.intel > 16) {
+            h.state = 'chop';
+            h.target = nearest(trees, h, function (t) { return t.wood > 0.4 && t.size > 0.45; });
+          } else {
+            h.state = 'wander';
+            h.target = { x: rand(30, W - 30), y: rand(30, H - 30) };
+          }
+        }
+        h.think -= dt;
+
+        if (h.state === 'eat' && h.food > 0) {
+          h.food -= 0.006 * dt;
+          h.hunger = Math.max(0, h.hunger - 0.018 * dt);
+          h.energy = Math.min(100, h.energy + 0.01 * dt);
+          if (h.hunger < 22) { h.state = 'wander'; h.target = null; }
+          return;
+        }
+
+        var tx = h.target ? h.target.x : h.x, ty = h.target ? h.target.y : h.y;
+        var dx = tx - h.x, dy = ty - h.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+        // Slow movement (pixels per sim-second)
+        var spd = 4.5 + h.intel * 0.03;
+        if (houses.some(function (hs) { return dist(h, hs) < 40; })) spd *= 1.12;
+        h.vx = (dx / d) * spd;
+        h.vy = (dy / d) * spd;
+        h.x += h.vx * dt;
+        h.y += h.vy * dt;
+        h.x = Math.max(12, Math.min(W - 12, h.x));
+        h.y = Math.max(12, Math.min(H - 12, h.y));
+
+        if (d < 16) {
+          if (h.state === 'forage') {
+            if (h.target && h.target.fruit !== undefined) {
+              if (h.target.fruit > 0) {
+                h.target.fruit -= 0.012 * dt;
+                h.food += 0.009 * dt;
+                h.hunger = Math.max(0, h.hunger - 0.008 * dt);
+                h.intel = Math.min(100, h.intel + 0.0006 * dt);
+              }
+            } else if (h.target && h.target.food !== undefined) {
+              if (h.target.food > 0) {
+                h.target.food -= 0.015 * dt;
+                h.food += 0.012 * dt;
+                h.hunger = Math.max(0, h.hunger - 0.01 * dt);
+              }
+            }
+            if (h.target && ((h.target.fruit !== undefined && h.target.fruit <= 0) ||
+                (h.target.food !== undefined && h.target.food <= 0.15))) {
+              h.target = null; h.think = 0;
+            }
+          } else if (h.state === 'chop' && h.target && h.target.wood > 0) {
+            h.target.wood -= 0.008 * dt;
+            h.wood += 0.006 * dt;
+            h.intel = Math.min(100, h.intel + 0.0005 * dt);
+            if (h.target.wood <= 0) { h.target = null; h.think = 0; }
+          } else if (h.state === 'build' && h.wood >= 4) {
+            houses.push({ x: h.x, y: h.y, level: 1 + Math.floor(h.intel / 45) });
+            h.wood -= 4;
+            h.intel = Math.min(100, h.intel + 0.8); // small permanent boost for building
+            h.state = 'wander'; h.target = null;
+            showToast('House built (IQ ' + Math.round(h.intel) + ')');
+          } else if (h.state === 'social' && h.target && !h.target.dead) {
+            tryReproduce(h, h.target);
+            h.think = 20;
+          } else {
+            h.target = null; h.think = 0;
+          }
+        }
+      }
+
+      function updateWorld(dt) {
+        // dt = sim-seconds
+        day += dt / 120; // 1 "day" ≈ 2 real minutes at 1x
+        plants.forEach(function (p) {
+          p.stage = Math.min(1.5, p.stage + 0.00012 * dt);
+          if (p.stage > 0.55) p.food = Math.min(3, p.food + 0.00018 * dt);
+        });
+        trees.forEach(function (t) {
+          t.age += dt;
+          t.size = Math.min(1.35, t.size + 0.000035 * dt);
+          if (t.size > 0.55) {
+            t.fruit = Math.min(5, t.fruit + 0.00012 * dt);
+            t.wood = Math.min(8, t.wood + 0.00007 * dt);
+          }
+        });
+        if (Math.random() < 0.0006 * dt && plants.length < 45) {
+          plants.push({ x: rand(20, W - 20), y: rand(20, H - 20), stage: 0.08, food: 0.15 });
+        }
+        humans.forEach(function (h) { updateHuman(h, dt); });
+        humans = humans.filter(function (h) { return !h.dead; });
+        plants = plants.filter(function (p) { return p.food > 0.04 || p.stage < 1.1; });
+        updateHud();
+      }
+
+      function updateHud() {
+        var pop = humans.length;
+        var iq = pop ? Math.round(humans.reduce(function (s, h) { return s + h.intel; }, 0) / pop) : 0;
+        win.el.querySelector('#gen-pop').textContent = pop;
+        win.el.querySelector('#gen-iq').textContent = iq;
+        win.el.querySelector('#gen-gen').textContent = maxGen;
+        win.el.querySelector('#gen-trees').textContent = trees.length;
+        win.el.querySelector('#gen-houses').textContent = houses.length;
+        win.el.querySelector('#gen-day').textContent = Math.floor(day);
+      }
+
+      function draw() {
+        var g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#1a3a28');
+        g.addColorStop(1, '#0f2818');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
+        for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+        for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+        houses.forEach(function (hs) {
+          ctx.fillStyle = '#5a3a22';
+          ctx.fillRect(hs.x - 14, hs.y - 10, 28, 20);
+          ctx.fillStyle = '#8b5a2b';
+          ctx.beginPath();
+          ctx.moveTo(hs.x - 16, hs.y - 10);
+          ctx.lineTo(hs.x, hs.y - 22 - hs.level * 2);
+          ctx.lineTo(hs.x + 16, hs.y - 10);
+          ctx.fill();
+          ctx.fillStyle = '#ffcc66';
+          ctx.fillRect(hs.x - 4, hs.y - 2, 5, 6);
+        });
+
+        plants.forEach(function (p) {
+          var s = 4 + p.stage * 6;
+          ctx.fillStyle = p.stage > 0.8 ? '#4caf50' : '#66bb6a';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+          ctx.fill();
+          if (p.food > 1) {
+            ctx.fillStyle = '#ffeb3b';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y - s * 0.6, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        trees.forEach(function (t) {
+          var trunkH = 10 + t.size * 14;
+          ctx.fillStyle = '#5d4037';
+          ctx.fillRect(t.x - 3, t.y - trunkH + 6, 6, trunkH);
+          ctx.fillStyle = t.fruit > 1 ? '#2e7d32' : '#388e3c';
+          ctx.beginPath();
+          ctx.arc(t.x, t.y - trunkH + 4, 8 + t.size * 10, 0, Math.PI * 2);
+          ctx.fill();
+          if (t.fruit > 2) {
+            ctx.fillStyle = '#e53935';
+            ctx.beginPath();
+            ctx.arc(t.x - 5, t.y - trunkH, 3, 0, Math.PI * 2);
+            ctx.arc(t.x + 6, t.y - trunkH + 3, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        humans.forEach(function (h) {
+          ctx.fillStyle = h.color;
+          ctx.beginPath();
+          ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffe0b2';
+          ctx.beginPath();
+          ctx.arc(h.x, h.y - 9, 5, 0, Math.PI * 2);
+          ctx.fill();
+          if (h.intel > 35) {
+            ctx.strokeStyle = 'rgba(100,200,255,' + Math.min(1, (h.intel - 35) / 55) + ')';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(h.x, h.y - 9, 8, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = h.gender === 'm' ? '#4fc3f7' : '#f48fb1';
+          ctx.fillRect(h.x - 2, h.y + 6, 4, 3);
+          if (selected === h) {
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(h.x, h.y - 4, 14, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+
+        if (selected && !selected.dead) {
+          var lifeLeft = Math.max(0, selected.maxAge - selected.age);
+          var mins = Math.floor(lifeLeft / 60);
+          var secs = Math.floor(lifeLeft % 60);
+          ctx.fillStyle = 'rgba(0,0,0,0.75)';
+          ctx.fillRect(8, 8, 220, 92);
+          ctx.fillStyle = '#e8e8f0';
+          ctx.font = '12px Inter, sans-serif';
+          ctx.fillText('Human #' + selected.id + '  Gen ' + selected.gen, 16, 24);
+          ctx.fillText('IQ ' + Math.round(selected.intel) + '  Energy ' + Math.round(selected.energy), 16, 42);
+          ctx.fillText('Hunger ' + Math.round(selected.hunger) + '  Age ' + Math.floor(selected.age / 60) + 'm', 16, 60);
+          ctx.fillText('Life left ~' + mins + 'm ' + secs + 's  ·  ' + selected.state, 16, 78);
+          ctx.fillText('Wood ' + selected.wood.toFixed(1) + '  Food ' + selected.food.toFixed(1), 16, 94);
+        }
+      }
+
+      function loop(now) {
+        if (win.closed) return;
+        var realDt = Math.min(0.1, (now - lastTs) / 1000); // real seconds, cap
+        lastTs = now;
+        if (running) {
+          var simDt = realDt * speed;
+          updateWorld(simDt);
+        }
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      win.el.querySelector('#gen-spawn').addEventListener('click', function () { spawnHuman(false); sfx('click'); });
+      win.el.querySelector('#gen-smart').addEventListener('click', function () { spawnHuman(true); sfx('click'); showToast('Smart human spawned'); });
+      win.el.querySelector('#gen-plant').addEventListener('click', function () {
+        plants.push({ x: rand(30, W - 30), y: rand(30, H - 30), stage: 0.25, food: 0.4 });
+        sfx('click');
+      });
+      win.el.querySelector('#gen-pause').addEventListener('click', function () {
+        running = !running;
+        win.el.querySelector('#gen-pause').textContent = running ? 'Pause' : 'Resume';
+      });
+      var speeds = [1, 2, 4, 8, 16], si = 0;
+      win.el.querySelector('#gen-speed').addEventListener('click', function () {
+        si = (si + 1) % speeds.length;
+        speed = speeds[si];
+        win.el.querySelector('#gen-speed').textContent = 'Speed ' + speed + 'x';
+      });
+      win.el.querySelector('#gen-clear').addEventListener('click', function () { seedWorld(); sfx('click'); });
+
+      canvas.addEventListener('click', function (e) {
+        var r = canvas.getBoundingClientRect();
+        var mx = (e.clientX - r.left) * (W / r.width);
+        var my = (e.clientY - r.top) * (H / r.height);
+        selected = null;
+        var best = 22;
+        humans.forEach(function (h) {
+          var d = Math.hypot(h.x - mx, h.y - my);
+          if (d < best) { best = d; selected = h; }
+        });
+      });
+
+      seedWorld();
+      requestAnimationFrame(loop);
+    }, 50);
+  }
+
   function openSolitaire() {
     const win = createWindow('solitaire-game', 'Solitaire', '🃏',
       '<div class="sol-body"><div class="game-btn-row"><button type="button" id="sol-new">New Game</button><span id="sol-msg" style="font-size:0.8rem;color:var(--text-dim)"></span></div>' +
@@ -5014,6 +5437,22 @@
     document.addEventListener('click', function (e) {
       var panel = document.getElementById('clip-panel');
       if (panel && !panel.contains(e.target) && e.target.id !== 'clip-icon') panel.classList.add('hidden');
+    });
+
+    // D-pad / virtual joystick press feedback (touch + mouse)
+    document.addEventListener('pointerdown', function (e) {
+      var btn = e.target.closest && e.target.closest('.dpad button, .virtual-joystick button, .race-touch button, .tt-pad button');
+      if (btn) btn.classList.add('pressed');
+    });
+    document.addEventListener('pointerup', function () {
+      document.querySelectorAll('.dpad button.pressed, .virtual-joystick button.pressed, .race-touch button.pressed, .tt-pad button.pressed').forEach(function (b) {
+        b.classList.remove('pressed');
+      });
+    });
+    document.addEventListener('pointercancel', function () {
+      document.querySelectorAll('.dpad button.pressed, .virtual-joystick button.pressed, .race-touch button.pressed, .tt-pad button.pressed').forEach(function (b) {
+        b.classList.remove('pressed');
+      });
     });
   }
 

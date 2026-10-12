@@ -161,7 +161,20 @@ body {
 }
 .window.maximized {
   top: 0 !important; left: 0 !important; width: 100% !important;
-  height: calc(100% - var(--taskbar-h)) !important; border-radius: 0;
+  height: 100% !important; border-radius: 0; z-index: 6000 !important;
+  border: none !important;
+}
+/* When a window is maximized, tuck the taskbar under it (true full-screen app) */
+body.has-maximized #taskbar {
+  opacity: 0; pointer-events: none; transform: translateY(100%);
+  transition: opacity 0.2s, transform 0.2s;
+}
+#taskbar { transition: opacity 0.2s, transform 0.2s; }
+body.has-maximized .window.maximized .window-titlebar {
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+}
+.window.maximized .window-content {
+  overflow: hidden; display: flex; flex-direction: column;
 }
 .window.minimized { display: none !important; }
 .window-titlebar {
@@ -439,35 +452,86 @@ body {
 .game-card h4 { font-size: 0.92rem; margin-bottom: 4px; }
 .game-card p { font-size: 0.72rem; color: var(--text-dim); }
 
-.snake-container, .ttt-container, .g2048-container, .memory-container {
-  display: flex; flex-direction: column; align-items: center; padding: 14px; gap: 10px; height: 100%;
+.snake-container, .ttt-container, .g2048-container, .memory-container,
+.tetris-body, .brk-body, .race-body, .tank-body, .ag-body, .genesis-wrap {
+  display: flex; flex-direction: column; align-items: center; padding: 12px; gap: 10px;
+  height: 100%; min-height: 0; box-sizing: border-box;
 }
 .snake-hud, .g2048-hud {
   display: flex; justify-content: space-between; align-items: center;
-  width: 100%; max-width: 400px; font-family: var(--mono); font-size: 0.85rem;
+  width: 100%; max-width: 480px; font-family: var(--mono); font-size: 0.85rem; flex-shrink: 0;
 }
-#snake-canvas {
+#snake-canvas, #tet-canvas, #brk-canvas, #race-canvas, #tank-canvas,
+#gen-canvas, canvas[id$="-canvas"] {
   background: #0d0d1a; border: 2px solid var(--border); border-radius: 8px;
   image-rendering: pixelated; max-width: 100%; touch-action: none;
+  flex: 1 1 auto; min-height: 120px; object-fit: contain;
 }
-.game-btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.game-btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; flex-shrink: 0; }
 .game-btn-row button {
-  padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px;
-  background: rgba(0,212,255,0.1); color: var(--accent); cursor: pointer; font-size: 0.82rem;
+  padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px;
+  background: rgba(0,212,255,0.1); color: var(--accent); cursor: pointer; font-size: 0.85rem;
+  min-height: 40px; min-width: 44px;
 }
 .game-btn-row button:hover { background: rgba(0,212,255,0.25); }
-.dpad {
-  display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px;
+/* Larger joystick / D-pad with dedicated space */
+.dpad, .virtual-joystick {
+  display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px);
+  gap: 6px; margin: 8px auto 12px; flex-shrink: 0;
+  padding: 8px; background: rgba(0,0,0,0.25); border-radius: 16px;
+  border: 1px solid var(--border);
 }
-.dpad button {
-  border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.06);
-  color: var(--text); font-size: 1rem; cursor: pointer;
+.dpad button, .virtual-joystick button {
+  border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.08);
+  color: var(--text); font-size: 1.15rem; cursor: pointer;
+  width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
 }
-.dpad button:active { background: rgba(0,212,255,0.25); }
-.dpad .up { grid-column: 2; grid-row: 1; }
-.dpad .left { grid-column: 1; grid-row: 2; }
-.dpad .right { grid-column: 3; grid-row: 2; }
-.dpad .down { grid-column: 2; grid-row: 3; }
+.dpad button:active, .virtual-joystick button:active,
+.dpad button.pressed, .virtual-joystick button.pressed {
+  background: rgba(0,212,255,0.35); transform: scale(0.94);
+}
+.dpad .up, .virtual-joystick .up { grid-column: 2; grid-row: 1; }
+.dpad .left, .virtual-joystick .left { grid-column: 1; grid-row: 2; }
+.dpad .right, .virtual-joystick .right { grid-column: 3; grid-row: 2; }
+.dpad .down, .virtual-joystick .down { grid-column: 2; grid-row: 3; }
+/* Dual pads (2P) need extra room */
+.dual-pads {
+  display: flex; justify-content: space-between; width: 100%; max-width: 520px;
+  gap: 16px; padding: 8px 12px 16px; flex-shrink: 0; flex-wrap: wrap;
+}
+.dual-pads .dpad { margin: 0 auto; }
+/* Maximized games: more room for canvas + controls */
+.window.maximized .snake-container,
+.window.maximized .ttt-container,
+.window.maximized .g2048-container,
+.window.maximized .memory-container,
+.window.maximized .tetris-body,
+.window.maximized .brk-body,
+.window.maximized .race-body,
+.window.maximized .tank-body,
+.window.maximized .ag-body,
+.window.maximized .genesis-wrap {
+  padding: 16px 16px 20px; gap: 12px;
+}
+.window.maximized .dpad,
+.window.maximized .virtual-joystick {
+  grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px);
+  gap: 8px;
+}
+.window.maximized .dpad button,
+.window.maximized .virtual-joystick button {
+  width: 64px; height: 64px; font-size: 1.3rem; border-radius: 14px;
+}
+.window.maximized #snake-canvas,
+.window.maximized #tet-canvas,
+.window.maximized #brk-canvas,
+.window.maximized #race-canvas,
+.window.maximized #tank-canvas,
+.window.maximized #gen-canvas {
+  max-height: calc(100% - 160px);
+  width: auto; height: auto;
+}
 
 .ttt-board {
   display: grid; grid-template-columns: repeat(3, 72px); grid-template-rows: repeat(3, 72px); gap: 6px;
@@ -1145,8 +1209,9 @@ body {
 .tt-pad { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .tt-pad div { display: flex; gap: 4px; }
 .tt-pad button {
-  width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--border);
-  background: rgba(0,212,255,0.12); color: var(--text); font-size: 1.1rem; cursor: pointer;
+  width: 56px; height: 56px; border-radius: 14px; border: 1px solid var(--border);
+  background: rgba(0,212,255,0.12); color: var(--text); font-size: 1.2rem; cursor: pointer;
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
 }
 .tt-pad button:active { background: rgba(0,212,255,0.35); }
 .music-player .music-controls button { min-width: 36px; }
@@ -1314,8 +1379,13 @@ body {
 .race-msg { font-size: 0.82rem; color: var(--accent); min-height: 1.2em; }
 .race-touch { display: none; gap: 8px; margin-top: 4px; }
 .race-touch button {
-  width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--border);
-  background: rgba(0,212,255,0.12); color: var(--text); font-size: 1.2rem; cursor: pointer;
+  width: 60px; height: 60px; border-radius: 14px; border: 1px solid var(--border);
+  background: rgba(0,212,255,0.12); color: var(--text); font-size: 1.25rem; cursor: pointer;
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
+}
+.race-touch, .tank-touch {
+  flex-shrink: 0; padding: 8px 4px 12px; min-height: 72px;
+  justify-content: center; align-items: center;
 }
 .race-touch button:active { background: rgba(0,212,255,0.35); }
 @media (max-width: 700px) {
@@ -1400,4 +1470,43 @@ body {
   display: inline-block; padding: 2px 7px; border-radius: 5px;
   border: 1px solid var(--border); background: rgba(0,0,0,0.35);
   font-family: var(--mono); font-size: 0.8rem;
+}
+
+/* Orbit Genesis life sim */
+.genesis-wrap { display: flex; flex-direction: column; height: 100%; padding: 8px; gap: 6px; }
+.genesis-hud {
+  display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.78rem; color: var(--text-dim);
+  padding: 4px 8px; background: rgba(0,0,0,0.25); border-radius: 8px;
+}
+.genesis-hud strong { color: var(--accent); }
+#gen-canvas {
+  width: 100%; height: auto; border-radius: 10px; background: #0f2818;
+  cursor: crosshair; border: 1px solid var(--border);
+}
+.gen-controls { margin-top: 2px; }
+.gen-help {
+  font-size: 0.72rem; color: var(--text-dim); text-align: center; margin: 0;
+}
+
+/* Always reserve space for on-screen controls on touch devices */
+@media (pointer: coarse), (max-width: 900px) {
+  .dpad, .virtual-joystick, .race-touch, .tank-touch { display: grid !important; }
+  .race-touch, .tank-touch { display: flex !important; }
+  .race-help, .tank-help { display: none; }
+}
+.window.maximized .race-touch,
+.window.maximized .tank-touch {
+  display: flex !important;
+}
+.window.maximized .dpad {
+  display: grid !important;
+}
+/* Game windows: prevent content overflow clipping joysticks */
+.window-content:has(.dpad),
+.window-content:has(.race-touch),
+.window-content:has(.tank-touch),
+.window-content:has(.virtual-joystick) {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
