@@ -1,13 +1,14 @@
-# OrbitOS v1.6.4 — Utility Pack + Genesis
+# OrbitOS v1.6.5 — Utility Pack + Genesis
 
 Pure HTML/CSS/JS desktop for GitHub Pages or offline (open `index.html`).
 
-## New in 1.6.4
+## New in 1.6.5
 - **Orbit Genesis** — Living world simulation (slow)
-  - Each human lives ~2 real hours at 1× speed
-  - IQ evolves very gradually over a full lifetime
-  - Plants & trees grow slowly; forage, build, reproduce, die
-  - Click a human to see remaining life time
+  - Humans start at IQ ~30, learn over life, smarter each generation
+  - Mature at ~1 hour of age; reproduce before ~2h lifespan ends
+  - 10 wood → house; after colony: farms, storage, workshops, capitol
+  - Colony forms when 10 humans vote yes; farming unlocks after
+  - Hunger >30 seek food; >60 walk slower · larger map
   - Speed 1×–16×, pause, plant seeds, reset
 
 ## New in 1.6.2

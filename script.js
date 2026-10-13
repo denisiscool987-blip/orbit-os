@@ -174,7 +174,7 @@
   }
   function exportBackup() {
     store = loadStore();
-    var data = JSON.stringify({ orbitos: true, version: '1.6.4', exported: new Date().toISOString(), data: store }, null, 2);
+    var data = JSON.stringify({ orbitos: true, version: '1.6.5', exported: new Date().toISOString(), data: store }, null, 2);
     var blob = new Blob([data], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -949,8 +949,7 @@
           '<div class="game-card" data-game="mines"><div class="game-emoji">💣</div><h4>Minesweeper</h4><p>Clear the field</p></div>' +
           '<div class="game-card" data-game="pong"><div class="game-emoji">🏓</div><h4>Pong</h4><p>Vs CPU</p></div>' +
           '<div class="game-card" data-game="c4"><div class="game-emoji">🔴</div><h4>Connect Four</h4><p>2 players</p></div>' +
-          '<div class="game-card" data-game="solitaire"><div class="game-emoji">🃏</div><h4>Solitaire</h4><p>Klondike</p></div>' +
-          '<div class="game-card" data-game="genesis"><div class="game-emoji">🌍</div><h4>Orbit Genesis</h4><p>Life simulation</p></div></div>';
+          '<div class="game-card" data-game="solitaire"><div class="game-emoji">🃏</div><h4>Solitaire</h4><p>Klondike</p></div></div>';
       },
       init: function (win) {
         win.el.querySelectorAll('.game-card').forEach(function (card) {
@@ -965,8 +964,7 @@
               sumo: openSumo, combat: openCombat, dualrace: openDualRace, volley: openVolley,
               duelsnake: openDuelSnake, hockey2: openHockey2P,
               snake: openSnake, ttt: openTTT, '2048': open2048, memory: openMemory,
-              mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire,
-              genesis: openGenesis
+              mines: openMines, pong: openPong, c4: openConnectFour, solitaire: openSolitaire
             };
             if (map[g]) map[g]();
           });
@@ -1158,7 +1156,7 @@
           neofetch: function () {
             var p = getProfile();
             return p.avatar + '  ' + p.handle + '@orbit\n' +
-              'OS: OrbitOS 1.6.4 (browser)\n' +
+              'OS: OrbitOS 1.6.5 (browser)\n' +
               'Host: GitHub Pages\n' +
               'Uptime: ' + Math.floor(performance.now() / 1000) + 's\n' +
               'Shell: orbitsh\n' +
@@ -1174,6 +1172,7 @@
           matrix: function () { showToast('Wake up, Neo...'); return 'Follow the white rabbit.'; },
           games: function () { openApp('games'); return 'Opening Games...'; },
           about: function () { openApp('about'); return 'Opening About...'; },
+          genesis: function () { openApp('genesis'); return 'Opening Orbit Genesis...'; },
           mute: function () { if (!muted) toggleMute(); return 'Muted.'; },
           unmute: function () { if (muted) toggleMute(); return 'Unmuted.'; }
         };
@@ -1505,7 +1504,7 @@
           '<div class="settings-row"><span>Backup</span><button type="button" id="settings-export">Export JSON</button></div>' +
           '<div class="settings-row"><span>Restore</span><button type="button" id="settings-import">Import JSON</button><input type="file" id="settings-import-file" accept="application/json,.json" hidden></div>' +
           '<div class="settings-row"><span>Achievements</span><button type="button" id="settings-ach">View</button></div></div>' +
-          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.4</span></div>' +
+          '<div class="settings-section"><h3>System</h3><div class="settings-row"><span>Version</span><span style="color:var(--text-dim)">OrbitOS 1.6.5</span></div>' +
           '<div class="settings-row"><span>Restore session on boot</span><span style="color:var(--text-dim)">On</span></div>' +
           '<div class="settings-row"><span>Clear local data</span><button type="button" id="settings-clear">Clear</button></div></div></div>';
       },
@@ -2057,15 +2056,24 @@
         });
       }
     },
+    genesis: {
+      title: 'Orbit Genesis', icon: '🌍', width: 940, height: 680,
+      content: function () {
+        return '<div class="genesis-wrap">' +'<div class="genesis-hud">' +'<span>Pop: <strong id="gen-pop">0</strong></span>' +'<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +'<span>Gen: <strong id="gen-gen">0</strong></span>' +'<span>Wood: <strong id="gen-wood">0</strong></span>' +'<span>Farms: <strong id="gen-farms">0</strong></span>' +'<span>Colony: <strong id="gen-colony">—</strong></span>' +'<span>Day: <strong id="gen-day">0</strong></span>' +'</div>' +'<canvas id="gen-canvas" width="900" height="520"></canvas>' +'<div class="game-btn-row gen-controls">' +'<button type="button" id="gen-spawn">👤 Spawn Human</button>' +'<button type="button" id="gen-plant">🌱 Plant Seed</button>' +'<button type="button" id="gen-pause">Pause</button>' +'<button type="button" id="gen-speed">Speed 1x</button>' +'<button type="button" id="gen-clear">Reset World</button>' +'</div>' +'<p class="gen-help">1 couple per house · settle then random births · monogamy · mother rests · 20min cooldown</p>' +'</div>';
+      },
+      init: function (win) {
+        initGenesis(win);
+      }
+    },
     about: {
       title: 'About OrbitOS', icon: 'ℹ️', width: 460, height: 520,
       content: function () {
         return '<div class="about-body"><div class="about-logo">🚀</div><h2>OrbitOS</h2>' +
-          '<p class="version">Version 1.6.4 — Polished Games + Fullscreen</p>' +
+          '<p class="version">Version 1.6.5 — Polished Games + Fullscreen</p>' +
           '<p>A complete desktop OS in pure HTML, CSS & JavaScript for GitHub Pages.</p>' +
           '<div class="about-features"><span>🪟 Windows</span><span>🎮 Games</span><span>🎵 Music</span><span>🤖 Assistant</span><span>🔦 Nightshift</span><span>🎨 Paint</span></div>' +
           '<div class="changelog"><h4>Changelog</h4><ul>' +
-          '<li><strong>1.6.4</strong> — Orbit Genesis life simulation (spawn humans, plants/trees, learn, build, reproduce, die)</li>' +
+          '<li><strong>1.6.5</strong> — Orbit Genesis as a full app (Start menu) · life sim with houses, couples, colonies</li>' +
           '<li><strong>1.6.2</strong> — Achievements, backup, tools, 2P games (WASD vs Arrows); +10 arcade, high scores; Profile, Unix terminal, panic key (`); Orbit Race; Settings tab disguise; clean desktop (Start menu apps); Nightshift (Pixel Palace), Orbit Assistant, Clock, Gallery; improved music</li>' +
           '<li><strong>1.5.0</strong> — Generative music studio, mobile polish</li>' +
           '<li><strong>1.4.x</strong> — Video, To-Do, Markdown, Solitaire, clipboard</li>' +
@@ -4323,7 +4331,7 @@
     var map = {
       browser: 'browser', proxy: 'browser', music: 'music', games: 'games', game: 'games',
       terminal: 'terminal', shell: 'terminal', notepad: 'notepad', calc: 'calculator', calculator: 'calculator',
-      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', stopwatch: 'stopwatch', timer: 'stopwatch', passgen: 'passgen', password: 'passgen', converter: 'converter', units: 'converter', pomodoro: 'pomodoro', focus: 'pomodoro', dice: 'dice', help: 'assistant',
+      paint: 'paint', files: 'files', explorer: 'files', settings: 'settings', about: 'about', assistant: 'assistant', clock: 'clockapp', clockapp: 'clockapp', gallery: 'gallery', stopwatch: 'stopwatch', timer: 'stopwatch', passgen: 'passgen', password: 'passgen', converter: 'converter', units: 'converter', pomodoro: 'pomodoro', focus: 'pomodoro', dice: 'dice', genesis: 'genesis', life: 'genesis', simulation: 'genesis', help: 'assistant',
       stickies: 'stickies', sticky: 'stickies', notes: 'stickies', tasks: 'taskmgr', taskmgr: 'taskmgr',
       task: 'taskmgr', weather: 'weather', video: 'video', todo: 'todo', markdown: 'markdown', snake: 'games', pong: 'games', mines: 'games', c4: 'games', connect: 'games'
     };
@@ -4504,6 +4512,7 @@
     { id: 'gallery', icon: '🖼️', label: 'Gallery', type: 'app', fn: function () { openApp('gallery'); } },
     { id: 'stopwatch', icon: '⏱️', label: 'Stopwatch', type: 'app', fn: function () { openApp('stopwatch'); } },
     { id: 'passgen', icon: '🔐', label: 'Password Generator', type: 'app', fn: function () { openApp('passgen'); } },
+    { id: 'genesis', icon: '🌍', label: 'Orbit Genesis', type: 'app', fn: function () { openApp('genesis'); } },
     { id: 'converter', icon: '📐', label: 'Unit Converter', type: 'app', fn: function () { openApp('converter'); } },
     { id: 'pomodoro', icon: '🍅', label: 'Pomodoro', type: 'app', fn: function () { openApp('pomodoro'); } },
     { id: 'dice', icon: '🎲', label: 'Dice & Coin', type: 'app', fn: function () { openApp('dice'); } },
@@ -4575,76 +4584,87 @@
 
 
   function openGenesis() {
-    const win = createWindow('genesis-game', 'Orbit Genesis · Life Sim', '🌍',
-      '<div class="genesis-wrap">' +
-      '<div class="genesis-hud">' +
-      '<span>Pop: <strong id="gen-pop">0</strong></span>' +
-      '<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +
-      '<span>Gen: <strong id="gen-gen">0</strong></span>' +
-      '<span>Trees: <strong id="gen-trees">0</strong></span>' +
-      '<span>Houses: <strong id="gen-houses">0</strong></span>' +
-      '<span>Day: <strong id="gen-day">0</strong></span>' +
-      '<span>Life: <strong>~2h</strong></span>' +
-      '</div>' +
-      '<canvas id="gen-canvas" width="720" height="420"></canvas>' +
-      '<div class="game-btn-row gen-controls">' +
-      '<button type="button" id="gen-spawn">👤 Spawn Human</button>' +
-      '<button type="button" id="gen-smart">🧠 Spawn Smart</button>' +
-      '<button type="button" id="gen-plant">🌱 Plant Seed</button>' +
-      '<button type="button" id="gen-pause">Pause</button>' +
-      '<button type="button" id="gen-speed">Speed 1x</button>' +
-      '<button type="button" id="gen-clear">Reset World</button>' +
-      '</div>' +
-      '<p class="gen-help">Slow life sim · each human lives ~2 real hours at 1x · IQ evolves gradually · click a human for stats</p>' +
-      '</div>', 760, 580);
+    return openApp('genesis');
+  }
 
-    setTimeout(function () {
+  function initGenesis(win) {
+    if (!win || !win.el) return;
+    (function () {
       var canvas = win.el.querySelector('#gen-canvas');
       var ctx = canvas.getContext('2d');
       var W = canvas.width, H = canvas.height;
       var running = true, speed = 1, day = 0;
-      var humans = [], plants = [], trees = [], houses = [], nextId = 1, maxGen = 0;
-      var selected = null;
+      var humans = [], plants = [], trees = [], buildings = [];
+      var nextId = 1, maxGen = 0, selected = null;
+      var colony = null;
       var lastTs = performance.now();
-
-      // Time scale: 1 unit of "sim second" ≈ 1 real second at speed 1x
-      // Human lifespan ≈ 2 hours = 7200 sim-seconds
       var LIFE_SEC = 7200;
+      var MATURE_AGE = 900; // ~15 min at 1x — childhood ends / can leave house
+      var REPRO_COOL = 1200; // 20 min between births at 1x
+      var WOOD_FOR_HOUSE = 10;
+      var BUILD_CLEAR = 38;
+      var BUILD_TIME = 55; // sim-seconds to finish construction
 
       function rand(a, b) { return a + Math.random() * (b - a); }
-      function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+      function dist(a, b) {
+        if (!a || !b || a.x == null || b.x == null) return 1e9;
+        var dx = a.x - b.x, dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+      }
 
-      function spawnHuman(smart) {
+      function spawnHuman(parentGen, parentIntel, forceGender) {
+        var baseIQ = 30;
+        var gen = parentGen || 0;
+        var intel = parentIntel != null
+          ? Math.min(95, parentIntel + 2 + rand(-1, 3))
+          : baseIQ + rand(-2, 4);
+        if (gen > 0 && parentIntel == null) intel = baseIQ + gen * 2 + rand(-1, 3);
+        var gender = forceGender;
+        if (!gender) {
+          // Keep population roughly balanced
+          var males = humans.filter(function (o) { return !o.dead && o.gender === 'm'; }).length;
+          var females = humans.filter(function (o) { return !o.dead && o.gender === 'f'; }).length;
+          if (males > females + 1) gender = 'f';
+          else if (females > males + 1) gender = 'm';
+          else gender = Math.random() < 0.5 ? 'm' : 'f';
+        }
         var h = {
-          id: nextId++, x: rand(40, W - 40), y: rand(40, H - 40),
-          vx: 0, vy: 0,
-          energy: 85 + rand(0, 15),
-          hunger: 15 + rand(0, 15),
-          age: 0,
-          maxAge: LIFE_SEC + rand(0, 1800), // ~2h to ~2.5h
-          intel: smart ? 40 + rand(0, 20) : 12 + rand(0, 12),
-          gender: Math.random() < 0.5 ? 'm' : 'f',
-          state: 'wander', target: null,
-          wood: 0, food: 0, gen: 0,
-          color: smart ? '#7cf' : '#fc8',
-          cool: 0, think: 0
+          id: nextId++, x: rand(50, W - 50), y: rand(50, H - 50),
+          energy: 88 + rand(0, 12), hunger: 12 + rand(0, 12),
+          age: 0, maxAge: LIFE_SEC + rand(0, 1200),
+          intel: Math.max(28, Math.min(100, intel)),
+          gender: gender,
+          state: 'wander', target: null, wanderTo: null,
+          wood: 0, food: 0, gen: gen, color: '#fc8',
+          cool: 0, think: rand(2, 8),
+          votedColony: false, colonyYes: false,
+          home: null, buildSite: null, buildProgress: 0, buildType: null,
+          stateTime: 0, tradeCool: 0, kids: 0,
+          resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null,
+          spouse: null, mateTarget: null, babyReadyAt: 0
         };
         humans.push(h);
         return h;
       }
 
       function seedWorld() {
-        humans = []; plants = []; trees = []; houses = []; day = 0; maxGen = 0; nextId = 1; selected = null;
-        for (var i = 0; i < 14; i++) {
+        humans = []; plants = []; trees = []; buildings = [];
+        day = 0; maxGen = 0; nextId = 1; selected = null; colony = null;
+        for (var i = 0; i < 18; i++) {
           trees.push({
-            x: rand(30, W - 30), y: rand(30, H - 30),
-            size: 0.35 + rand(0, 0.55), fruit: rand(0, 2), wood: 2 + rand(0, 3), age: rand(0, 500)
+            x: rand(40, W - 40), y: rand(40, H - 40),
+            size: 0.35 + rand(0, 0.55), fruit: rand(0, 2), wood: 3 + rand(0, 4), age: rand(0, 400)
           });
         }
-        for (var j = 0; j < 22; j++) {
-          plants.push({ x: rand(20, W - 20), y: rand(20, H - 20), stage: rand(0.15, 0.9), food: rand(0.4, 1.8) });
+        for (var j = 0; j < 28; j++) {
+          plants.push({ x: rand(30, W - 30), y: rand(30, H - 30), stage: rand(0.2, 0.95), food: rand(0.5, 2) });
         }
-        for (var k = 0; k < 3; k++) spawnHuman(false);
+        spawnHuman(0, null, 'm');
+        spawnHuman(0, null, 'f');
+        spawnHuman(0, null, 'm');
+        spawnHuman(0, null, 'f');
+        spawnHuman(0, null, 'm');
+        spawnHuman(0, null, 'f');
         updateHud();
       }
 
@@ -4658,136 +4678,829 @@
         return best;
       }
 
+      function clearInvalidTarget(h) {
+        if (!h.target) return;
+        // Depleted plant/tree
+        if (h.target.wood !== undefined && h.target.wood <= 0) { h.target = null; return; }
+        if (h.target.fruit !== undefined && h.target.fruit <= 0 && h.target.wood === undefined) { h.target = null; return; }
+        if (h.target.food !== undefined && h.target.type === undefined && h.target.food <= 0.1) { h.target = null; return; }
+        if (h.target.type === 'farm' && (h.target.food || 0) <= 0.1 && h.state === 'forage') { h.target = null; return; }
+        // Dead trade partner
+        if (h.target.dead) { h.target = null; return; }
+        // Target left the world (not in arrays)
+        if (h.target.id != null && h.state !== 'build') {
+          var stillThere = humans.some(function (o) { return o === h.target; });
+          if (!stillThere && h.target.gender != null) h.target = null;
+        }
+      }
+
+      function isFamilyHouse(b) {
+        return b && (b.type === 'house' || b.type === 'capitol');
+      }
+
+      function houseOwnersAlive(house) {
+        if (!house || !house.ownerIds || !house.ownerIds.length) return false;
+        return house.ownerIds.some(function (id) {
+          return humans.some(function (h) { return h.id === id && !h.dead; });
+        });
+      }
+
+      function nearestHouse(from, onlyOwnOrFree) {
+        return nearest(buildings, from, function (b) {
+          if (!isFamilyHouse(b)) return false;
+          if (!onlyOwnOrFree) return true;
+          // Free house OR already owned by this human / their spouse
+          if (!b.ownerIds || !b.ownerIds.length || !houseOwnersAlive(b)) return true;
+          if (from && b.ownerIds.indexOf(from.id) >= 0) return true;
+          if (from && from.spouse && b.ownerIds.indexOf(from.spouse.id) >= 0) return true;
+          return false;
+        });
+      }
+
+      function nearestFreeHouse(from) {
+        return nearest(buildings, from, function (b) {
+          if (!isFamilyHouse(b)) return false;
+          if (!b.ownerIds || !b.ownerIds.length) return true;
+          return !houseOwnersAlive(b);
+        });
+      }
+
+      function claimHouse(a, b, house) {
+        if (!house || !a || !b) return false;
+        // Already claimed by another living couple?
+        if (house.ownerIds && house.ownerIds.length && houseOwnersAlive(house)) {
+          var ok = house.ownerIds.indexOf(a.id) >= 0 || house.ownerIds.indexOf(b.id) >= 0;
+          if (!ok) return false;
+        }
+        house.ownerIds = [a.id, b.id];
+        a.home = house;
+        b.home = house;
+        return true;
+      }
+
+      function areKin(a, b) {
+        if (!a || !b || a === b) return true;
+        // Parent ↔ child
+        if (a.motherId === b.id || a.fatherId === b.id) return true;
+        if (b.motherId === a.id || b.fatherId === a.id) return true;
+        // Siblings (share a parent)
+        if (a.motherId && a.motherId === b.motherId) return true;
+        if (a.fatherId && a.fatherId === b.fatherId) return true;
+        // Grandparent-ish: one is parent of the other's parent
+        if (a.motherId && (b.motherId === a.motherId || b.fatherId === a.motherId)) return true;
+        if (a.fatherId && (b.motherId === a.fatherId || b.fatherId === a.fatherId)) return true;
+        if (b.motherId && (a.motherId === b.motherId || a.fatherId === b.motherId)) return true;
+        if (b.fatherId && (a.motherId === b.fatherId || a.fatherId === b.fatherId)) return true;
+        return false;
+      }
+
+      function formCouple(a, b) {
+        if (!a || !b || a.dead || b.dead) return false;
+        if (a.gender === b.gender) return false;
+        if (areKin(a, b)) return false; // no siblings / parent-child pairs
+        if (a.spouse && a.spouse !== b && !a.spouse.dead) return false;
+        if (b.spouse && b.spouse !== a && !b.spouse.dead) return false;
+        a.spouse = b;
+        b.spouse = a;
+        a.mateTarget = b;
+        b.mateTarget = a;
+        // Delay before they try for a baby (not instant) — 2–8 min at 1x
+        var delay = 120 + rand(0, 360);
+        a.babyReadyAt = a.age + delay;
+        b.babyReadyAt = b.age + delay;
+        showToast('Couple bonded · #' + a.id + ' & #' + b.id + ' · settling in');
+        return true;
+      }
+
+      function clearSpouse(h) {
+        if (!h) return;
+        if (h.spouse) {
+          var s = h.spouse;
+          if (s.spouse === h) s.spouse = null;
+          if (s.mateTarget === h) s.mateTarget = null;
+        }
+        // Free their house if both gone
+        if (h.home && h.home.ownerIds) {
+          var otherAlive = h.spouse && !h.spouse.dead;
+          if (!otherAlive) h.home.ownerIds = [];
+        }
+        h.spouse = null;
+        h.mateTarget = null;
+      }
+
       function tryReproduce(a, b) {
-        if (a.cool > 0 || b.cool > 0) return;
-        if (a.gender === b.gender) return;
-        // Mature after ~12 minutes of life (720 sec)
-        if (a.age < 720 || b.age < 720) return;
-        if (a.energy < 55 || b.energy < 55) return;
-        if (a.intel < 22 || b.intel < 22) return;
-        if (dist(a, b) > 28) return;
-        var child = spawnHuman(false);
-        child.x = (a.x + b.x) / 2 + rand(-12, 12);
-        child.y = (a.y + b.y) / 2 + rand(-12, 12);
-        // Slow inheritance + small mutation
-        child.intel = Math.min(90, (a.intel + b.intel) / 2 + rand(-3, 6));
-        child.gen = Math.max(a.gen, b.gen) + 1;
+        if (!a || !b || a.dead || b.dead) return false;
+        if (a.resting || b.resting) return false;
+        if (a.carrying || b.carrying) return false;
+        if (a.carriedBy || b.carriedBy) return false;
+        if (a.cool > 0 || b.cool > 0) return false;
+        if (a.gender === b.gender) return false;
+        if (areKin(a, b)) return false;
+        if (a.age < MATURE_AGE || b.age < MATURE_AGE) return false;
+        if (a.energy < 35 || b.energy < 35) return false;
+        if (dist(a, b) > 42) return false;
+        // Must be married to each other
+        if (a.spouse && a.spouse !== b) return false;
+        if (b.spouse && b.spouse !== a) return false;
+        if (!a.spouse || !b.spouse) {
+          if (!formCouple(a, b)) return false;
+        }
+
+        // Not ready yet (settling delay after pairing / moving in)
+        if ((a.babyReadyAt && a.age < a.babyReadyAt) || (b.babyReadyAt && b.age < b.babyReadyAt)) return false;
+
+        // Random — not every time they stand at the house
+        if (Math.random() > 0.12) return false;
+
+        // Own house only (1 couple per house)
+        var house = a.home || b.home;
+        if (!house || !isFamilyHouse(house)) {
+          house = nearestFreeHouse(a) || nearestFreeHouse(b);
+          if (house) claimHouse(a, b, house);
+        }
+        if (!house) return false;
+        // Ensure this house belongs to them
+        if (house.ownerIds && house.ownerIds.length && houseOwnersAlive(house)) {
+          if (house.ownerIds.indexOf(a.id) < 0 && house.ownerIds.indexOf(b.id) < 0) return false;
+        } else {
+          claimHouse(a, b, house);
+        }
+        if (dist(a, house) > 36 || dist(b, house) > 36) return false;
+
+        var mother = a.gender === 'f' ? a : b;
+        var father = a.gender === 'f' ? b : a;
+        var childGen = Math.max(a.gen, b.gen) + 1;
+        var avgIntel = (a.intel + b.intel) / 2;
+        var child = spawnHuman(childGen, avgIntel);
+        child.carriedBy = mother;
+        child.motherId = mother.id;
+        child.fatherId = father.id;
+        child.state = 'carried';
+        child.x = house.x + rand(-6, 6);
+        child.y = house.y + rand(-4, 4);
         if (child.gen > maxGen) maxGen = child.gen;
-        a.energy -= 18; b.energy -= 18;
-        a.cool = 900; b.cool = 900; // 15 min cooldown
-        a.state = 'wander'; b.state = 'wander';
-        showToast('New life · Generation ' + child.gen);
+        var t = Math.min(1, child.gen / 8);
+        child.color = 'rgb(' + Math.round(252 - t * 80) + ',' + Math.round(200 - t * 40) + ',' + Math.round(128 + t * 100) + ')';
+
+        a.energy -= 10; b.energy -= 10;
+        a.cool = REPRO_COOL; b.cool = REPRO_COOL;
+        a.kids = (a.kids || 0) + 1; b.kids = (b.kids || 0) + 1;
+        // After a birth, wait again before next (on top of cool)
+        a.babyReadyAt = a.age + REPRO_COOL + rand(60, 300);
+        b.babyReadyAt = b.age + REPRO_COOL + rand(60, 300);
+
+        mother.home = house;
+        father.home = house;
+        claimHouse(mother, father, house);
+
+        mother.resting = true;
+        mother.carrying = child;
+        mother.state = 'rest';
+        mother.target = house;
+        mother.think = 9999;
+        mother.buildSite = null;
+
+        father.state = 'home';
+        father.target = house;
+        father.think = 9999;
+        father.buildSite = null;
+
+        showToast('Birth at home · Family resting · Gen ' + child.gen);
+        sfx('success');
+        return true;
+      }
+
+      function releaseChild(mother, child) {
+        if (!child) return;
+        child.carriedBy = null;
+        child.motherId = null;
+        child.state = 'wander';
+        child.think = 2;
+        child.wanderTo = pickWanderPoint(child);
+        if (mother) {
+          mother.carrying = null;
+          mother.resting = false;
+          mother.state = 'wander';
+          mother.target = null;
+          mother.think = 4;
+          mother.wanderTo = pickWanderPoint(mother);
+          // Father can leave "home" wait mode but remains spouse
+          if (mother.spouse && !mother.spouse.dead && mother.spouse.state === 'home') {
+            mother.spouse.state = 'wander';
+            mother.spouse.target = null;
+            mother.spouse.think = 4;
+            mother.spouse.wanderTo = pickWanderPoint(mother.spouse);
+          }
+        }
+        showToast('Child matured · left the house (#' + child.id + ')');
+      }
+
+      function tryTrade(a, b) {
+        if (!a || !b || a.dead || b.dead) return;
+        if (a.tradeCool > 0 || b.tradeCool > 0) return;
+        if (dist(a, b) > 28) return;
+        // Exchange surplus wood/food
+        var traded = false;
+        if (a.wood > 4 && b.wood < 3) {
+          var give = Math.min(2.5, a.wood - 3);
+          a.wood -= give; b.wood += give; traded = true;
+        } else if (b.wood > 4 && a.wood < 3) {
+          var give2 = Math.min(2.5, b.wood - 3);
+          b.wood -= give2; a.wood += give2; traded = true;
+        }
+        if (a.food > 2 && b.hunger > 40 && b.food < 1) {
+          var f = Math.min(1.2, a.food - 0.5);
+          a.food -= f; b.food += f; traded = true;
+        } else if (b.food > 2 && a.hunger > 40 && a.food < 1) {
+          var f2 = Math.min(1.2, b.food - 0.5);
+          b.food -= f2; a.food += f2; traded = true;
+        }
+        if (traded) {
+          a.tradeCool = 40; b.tradeCool = 40;
+          a.intel = Math.min(100, a.intel + 0.15);
+          b.intel = Math.min(100, b.intel + 0.15);
+          a.state = 'wander'; b.state = 'wander';
+          a.target = null; b.target = null;
+        }
+      }
+
+      function tryColonyVote(h) {
+        if (colony && colony.formed) return;
+        if (h.votedColony) return;
+        if (h.age < MATURE_AGE * 0.5) return;
+        if (h.intel < 32) return;
+        var nearby = humans.filter(function (o) { return o !== h && !o.dead && dist(h, o) < 90; });
+        if (nearby.length < 3 && humans.length < 10) return;
+        h.votedColony = true;
+        var yesChance = 0.35 + (h.intel - 30) * 0.012;
+        h.colonyYes = Math.random() < yesChance;
+        if (!colony) colony = { name: 'New Colony', capital: null, members: [], votesYes: 0, votesNo: 0, formed: false };
+        if (h.colonyYes) {
+          colony.votesYes++;
+          if (colony.members.indexOf(h.id) < 0) colony.members.push(h.id);
+        } else colony.votesNo++;
+        if (colony.votesYes >= 10 && !colony.formed) {
+          colony.formed = true;
+          var cx = 0, cy = 0, n = 0;
+          humans.forEach(function (hm) {
+            if (colony.members.indexOf(hm.id) >= 0) { cx += hm.x; cy += hm.y; n++; }
+          });
+          if (n > 0) { cx /= n; cy /= n; } else { cx = W / 2; cy = H / 2; }
+          // Clear trees near capitol
+          trees = trees.filter(function (t) { return dist(t, { x: cx, y: cy }) > BUILD_CLEAR; });
+          colony.capital = { x: cx, y: cy };
+          buildings.push({ type: 'capitol', x: cx, y: cy, level: 1 });
+          showToast('Colony declared! Capitol founded · Farming unlocked');
+          sfx('success');
+        }
+      }
+
+      function siteBlocked(x, y, ignoreHuman) {
+        var i;
+        for (i = 0; i < buildings.length; i++) {
+          if (dist({ x: x, y: y }, buildings[i]) < BUILD_CLEAR) return true;
+        }
+        for (i = 0; i < trees.length; i++) {
+          if (dist({ x: x, y: y }, trees[i]) < BUILD_CLEAR * 0.85) return true;
+        }
+        for (i = 0; i < humans.length; i++) {
+          var hm = humans[i];
+          if (ignoreHuman && hm === ignoreHuman) continue; // don't block on our own site
+          if (hm.buildSite && dist({ x: x, y: y }, hm.buildSite) < BUILD_CLEAR * 0.75) return true;
+        }
+        return false;
+      }
+
+      function pickBuildSite(h) {
+        var anchors = buildings.filter(function (b) {
+          return b.type === 'house' || b.type === 'capitol' || b.type === 'storage' || b.type === 'workshop';
+        });
+        var candidates = [];
+        for (var tries = 0; tries < 50; tries++) {
+          var bx, by;
+          if (anchors.length > 0) {
+            var a = anchors[Math.floor(Math.random() * anchors.length)];
+            var ang = rand(0, Math.PI * 2);
+            var rad = BUILD_CLEAR + rand(2, 18);
+            bx = a.x + Math.cos(ang) * rad;
+            by = a.y + Math.sin(ang) * rad;
+          } else {
+            bx = h.x + rand(-40, 40);
+            by = h.y + rand(-40, 40);
+          }
+          bx = Math.max(55, Math.min(W - 55, bx));
+          by = Math.max(55, Math.min(H - 55, by));
+          if (!siteBlocked(bx, by)) candidates.push({ x: bx, y: by });
+          if (candidates.length >= 4) break;
+        }
+        if (!candidates.length) return null;
+        candidates.sort(function (a, b) { return dist(h, a) - dist(h, b); });
+        return candidates[0];
+      }
+
+      function chooseBuildType(h) {
+        if (colony && colony.formed) {
+          var hasFarm = buildings.some(function (b) { return b.type === 'farm'; });
+          var hasStorage = buildings.some(function (b) { return b.type === 'storage'; });
+          var hasWorkshop = buildings.some(function (b) { return b.type === 'workshop'; });
+          var roll = Math.random();
+          if (!hasFarm && h.intel > 34) return 'farm';
+          if (!hasStorage && h.intel > 36 && roll < 0.35) return 'storage';
+          if (!hasWorkshop && h.intel > 40 && roll < 0.25) return 'workshop';
+          if (roll < 0.2 && h.intel > 38) return 'farm';
+        }
+        return 'house';
+      }
+
+      function buildCost(type) {
+        if (type === 'workshop') return 14;
+        if (type === 'storage') return 12;
+        if (type === 'farm') return 10;
+        return WOOD_FOR_HOUSE;
+      }
+
+      function startBuilding(h) {
+        if (h.buildSite) return true;
+        if (h.wood < WOOD_FOR_HOUSE) return false;
+        var type = chooseBuildType(h);
+        var cost = buildCost(type);
+        if (h.wood < cost) return false;
+        var site = pickBuildSite(h);
+        if (!site) {
+          // No clear site — wander a bit, try later
+          h.state = 'wander';
+          h.target = null;
+          h.think = 8 + rand(0, 10);
+          return false;
+        }
+        // Clear any trees on the site
+        trees = trees.filter(function (t) { return dist(t, site) >= BUILD_CLEAR * 0.85; });
+        h.buildSite = site;
+        h.buildProgress = 0;
+        h.buildType = type;
+        h.state = 'build';
+        h.target = site;
+        return true;
+      }
+
+      function finishBuilding(h) {
+        if (!h.buildSite) return;
+        var type = h.buildType || 'house';
+        var cost = buildCost(type);
+        if (h.wood < cost) {
+          h.buildSite = null; h.buildProgress = 0; h.buildType = null;
+          h.state = 'wander'; h.target = null;
+          return;
+        }
+        // Clear trees/plants on the plot first, then check other blockers (ignore self)
+        trees = trees.filter(function (t) { return dist(t, h.buildSite) >= BUILD_CLEAR * 0.8; });
+        plants = plants.filter(function (p) { return dist(p, h.buildSite) >= 18; });
+        if (siteBlocked(h.buildSite.x, h.buildSite.y, h)) {
+          // Real conflict (another building / other builder) — cancel and retry later
+          h.buildSite = null; h.buildProgress = 0; h.buildType = null;
+          h.state = 'wander'; h.target = null; h.think = 5;
+          return;
+        }
+        h.wood -= cost;
+        var b = {
+          type: type,
+          x: h.buildSite.x,
+          y: h.buildSite.y,
+          level: 1 + Math.floor(h.intel / 50),
+          food: type === 'farm' ? 2 : 0,
+          ownerIds: [] // free until a couple claims it
+        };
+        buildings.push(b);
+        h.intel = Math.min(100, h.intel + 1.2);
+        // Builder does NOT instantly move in / reproduce — couples claim later
+        if (type === 'house' && h.spouse && !h.spouse.dead && (!h.home || !isFamilyHouse(h.home))) {
+          // Optional soft claim if married and homeless
+          claimHouse(h, h.spouse, b);
+          var settle2 = 150 + rand(0, 300);
+          h.babyReadyAt = Math.max(h.babyReadyAt || 0, h.age + settle2);
+          h.spouse.babyReadyAt = Math.max(h.spouse.babyReadyAt || 0, h.spouse.age + settle2);
+        }
+        h.buildSite = null; h.buildProgress = 0; h.buildType = null;
+        h.state = 'wander'; h.target = null; h.think = 6;
+        showToast(type.charAt(0).toUpperCase() + type.slice(1) + ' complete (IQ ' + Math.round(h.intel) + ')');
+      }
+
+      function pickWanderPoint(h) {
+        // Sometimes wander toward a group of humans (social clustering)
+        if (humans.length > 2 && Math.random() < 0.4) {
+          var other = humans[Math.floor(Math.random() * humans.length)];
+          if (other !== h && !other.dead) {
+            return {
+              x: Math.max(40, Math.min(W - 40, other.x + rand(-50, 50))),
+              y: Math.max(40, Math.min(H - 40, other.y + rand(-50, 50)))
+            };
+          }
+        }
+        return { x: rand(40, W - 40), y: rand(40, H - 40) };
+      }
+
+      function decide(h) {
+        clearInvalidTarget(h);
+        h.think = 4 + rand(0, 8);
+        h.stateTime = 0;
+
+        // 1) Hunger (only hard-interrupt when really hungry)
+        if (h.hunger > 30 && h.food > 0.4) {
+          h.state = 'eat'; h.target = null; return;
+        }
+        if (h.hunger > 45) {
+          h.state = 'forage';
+          var farm = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.3; });
+          if (farm) h.target = farm;
+          else {
+            h.target = nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
+                       nearest(trees, h, function (t) { return t.fruit > 0.3; });
+          }
+          if (!h.target) { h.state = 'wander'; h.wanderTo = pickWanderPoint(h); }
+          return;
+        }
+
+        // 2) Finish an in-progress build
+        if (h.buildSite) {
+          h.state = 'build';
+          h.target = h.buildSite;
+          return;
+        }
+
+        // Resting / home / carried handled in updateHuman
+        if (h.resting || h.state === 'rest') {
+          h.state = 'rest';
+          if (h.home) h.target = h.home;
+          return;
+        }
+        if (h.state === 'home') {
+          if (h.home) h.target = h.home;
+          return;
+        }
+        if (h.carriedBy) {
+          h.state = 'carried';
+          return;
+        }
+
+        // Clean up dead spouse — free to remarry
+        if (h.spouse && h.spouse.dead) clearSpouse(h);
+
+        // 3) Married: loyal to spouse only
+        if (h.spouse && !h.spouse.dead) {
+          var sp = h.spouse;
+          if (sp.resting || sp.state === 'rest') {
+            h.state = 'home';
+            h.home = sp.home || h.home;
+            h.target = h.home;
+            return;
+          }
+          // Claim a free house if they don't have a valid home yet (settle in — no baby yet)
+          var needsHome = !h.home || !isFamilyHouse(h.home) ||
+            (h.home.ownerIds && h.home.ownerIds.length &&
+             h.home.ownerIds.indexOf(h.id) < 0 && h.home.ownerIds.indexOf(sp.id) < 0 &&
+             houseOwnersAlive(h.home));
+          if (needsHome) {
+            var freeH = nearestFreeHouse(h);
+            if (freeH && Math.random() < 0.35) {
+              claimHouse(h, sp, freeH);
+              var settle = 90 + rand(0, 200);
+              h.babyReadyAt = Math.max(h.babyReadyAt || 0, h.age + settle);
+              sp.babyReadyAt = Math.max(sp.babyReadyAt || 0, sp.age + settle);
+              h.state = 'social';
+              h.target = freeH;
+              return;
+            }
+          }
+          // Occasional baby attempt — random, only when ready, only their house
+          var ready = (!h.babyReadyAt || h.age >= h.babyReadyAt) && (!sp.babyReadyAt || sp.age >= sp.babyReadyAt);
+          if (ready && h.cool <= 0 && sp.cool <= 0 && h.energy >= 35 && sp.energy >= 35 &&
+              (h.kids || 0) < 4 && !sp.carrying && Math.random() < 0.18) {
+            var famHouse = h.home || sp.home;
+            if (famHouse && isFamilyHouse(famHouse) &&
+                (!famHouse.ownerIds || !famHouse.ownerIds.length ||
+                 famHouse.ownerIds.indexOf(h.id) >= 0 || famHouse.ownerIds.indexOf(sp.id) >= 0)) {
+              h.state = 'social';
+              h.target = famHouse;
+              h.mateTarget = sp;
+              if (!sp.resting && sp.state !== 'rest' && sp.state !== 'home') {
+                sp.state = 'social';
+                sp.target = famHouse;
+                sp.mateTarget = h;
+                sp.think = 10;
+              }
+              return;
+            }
+          }
+          // Stay near spouse sometimes
+          if (dist(h, sp) > 55 && Math.random() < 0.4) {
+            h.state = 'social';
+            h.target = sp;
+            h.mateTarget = sp;
+            return;
+          }
+        }
+
+        // 3b) Singles: bond only if a FREE house exists (1 couple per house)
+        if (!h.spouse && h.age >= MATURE_AGE && Math.random() < 0.25 &&
+            h.energy >= 35 && !h.carrying) {
+          var freeHouse = nearestFreeHouse(h);
+          if (freeHouse) {
+            var partner = nearest(humans, h, function (o) {
+              return o !== h && !o.dead && o.gender !== h.gender &&
+                o.age >= MATURE_AGE && o.energy >= 35 &&
+                !o.resting && !o.carrying && !o.carriedBy &&
+                (!o.spouse || o.spouse.dead) &&
+                !areKin(h, o);
+            });
+            if (partner) {
+              formCouple(h, partner);
+              claimHouse(h, partner, freeHouse);
+              // Settling delay already set in formCouple — do NOT reproduce immediately
+              h.state = 'social';
+              h.target = freeHouse;
+              partner.state = 'social';
+              partner.target = freeHouse;
+              partner.mateTarget = h;
+              partner.think = 10;
+              return;
+            }
+          }
+        }
+
+        // 4) Mild hunger — forage when convenient
+        if (h.hunger > 30) {
+          h.state = 'forage';
+          var farm2 = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.3; });
+          if (farm2) h.target = farm2;
+          else {
+            h.target = nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
+                       nearest(trees, h, function (t) { return t.fruit > 0.3; });
+          }
+          if (!h.target) { h.state = 'wander'; h.wanderTo = pickWanderPoint(h); }
+          return;
+        }
+
+        // 5) Start build sometimes
+        if (h.wood >= WOOD_FOR_HOUSE && Math.random() < 0.4) {
+          if (startBuilding(h)) return;
+        }
+
+        // 6) Social / trade groups
+        if (Math.random() < 0.28) {
+          var buddy = nearest(humans, h, function (o) {
+            return o !== h && !o.dead && dist(h, o) < 180;
+          });
+          if (buddy) {
+            h.state = 'social';
+            h.target = buddy;
+            return;
+          }
+        }
+
+        // 5) Farm work after colony
+        if (colony && colony.formed && h.intel > 33 && Math.random() < 0.3) {
+          var myFarm = nearest(buildings, h, function (b) { return b.type === 'farm'; });
+          if (myFarm) {
+            h.state = 'farm';
+            h.target = myFarm;
+            return;
+          }
+        }
+
+        // 6) Sometimes chop — not always (wander is default)
+        if (h.wood < WOOD_FOR_HOUSE && Math.random() < 0.4) {
+          var tree = nearest(trees, h, function (t) { return t.wood > 0.5 && t.size > 0.4; });
+          if (tree) {
+            h.state = 'chop';
+            h.target = tree;
+            return;
+          }
+        }
+
+        // 7) Default: wander
+        h.state = 'wander';
+        h.target = null;
+        h.wanderTo = pickWanderPoint(h);
       }
 
       function updateHuman(h, dt) {
-        // dt is sim-seconds
         h.age += dt;
-        // Very slow hunger / energy drain so they can live hours
-        h.hunger += 0.0012 * dt;   // ~ full hunger over ~14 min if idle
-        h.energy -= 0.00055 * dt;
+        h.stateTime += dt;
         if (h.cool > 0) h.cool -= dt;
-        if (h.hunger > 85) h.energy -= 0.0025 * dt;
-        if (h.energy <= 0 || h.age > h.maxAge) {
-          h.dead = true;
+        if (h.tradeCool > 0) h.tradeCool -= dt;
+
+        // Carried babies: stay with mother, no independent actions
+        if (h.carriedBy) {
+          var mom = h.carriedBy;
+          if (!mom || mom.dead) {
+            h.carriedBy = null; h.state = 'wander'; h.think = 0;
+          } else {
+            h.x = mom.x + 5;
+            h.y = mom.y - 8;
+            h.hunger = Math.max(0, h.hunger - 0.002 * dt); // fed by mother
+            h.energy = Math.min(100, h.energy + 0.001 * dt);
+            if (h.age >= MATURE_AGE) releaseChild(mom, h);
+          }
+          if (h.energy <= 0 || h.age > h.maxAge) { h.dead = true; return; }
           return;
         }
 
-        // Extremely slow learning — meaningful IQ change over the full 2h life
-        if (h.state === 'forage' || h.state === 'build' || h.state === 'eat' || h.state === 'chop') {
-          h.intel = Math.min(100, h.intel + 0.00035 * dt);
-        } else {
-          h.intel = Math.min(100, h.intel + 0.00008 * dt);
+        // Resting mother in house with baby
+        if (h.resting || h.state === 'rest') {
+          h.hunger += 0.0004 * dt; // slower hunger while resting
+          h.energy = Math.min(100, h.energy + 0.001 * dt);
+          if (h.hunger > 85) h.energy -= 0.001 * dt;
+          if (h.energy <= 0 || h.age > h.maxAge) {
+            if (h.carrying) { h.carrying.carriedBy = null; h.carrying = null; }
+            h.dead = true; return;
+          }
+          // Stay at house
+          var home = h.home || nearestHouse(h);
+          if (home) {
+            h.home = home;
+            var hd = dist(h, home);
+            if (hd > 12) {
+              var dx = home.x - h.x, dy = home.y - h.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+              h.x += (dx / d) * 10 * dt;
+              h.y += (dy / d) * 10 * dt;
+            }
+          }
+          // Keep baby attached
+          if (h.carrying && !h.carrying.dead) {
+            h.carrying.x = h.x + 5;
+            h.carrying.y = h.y - 8;
+            if (h.carrying.age >= MATURE_AGE) releaseChild(h, h.carrying);
+          } else {
+            // Baby gone — stop resting
+            h.resting = false; h.carrying = null; h.state = 'wander'; h.think = 2;
+          }
+          return;
         }
 
-        if (!h.target || h.think <= 0) {
-          h.think = 8 + rand(0, 14); // re-decide every ~8–22 sim seconds
-          if (h.hunger > 50 && h.food > 0) {
-            h.state = 'eat';
-          } else if (h.hunger > 35) {
-            h.state = 'forage';
-            h.target = nearest(plants, h, function (p) { return p.stage > 0.45 && p.food > 0.25; }) ||
-                       nearest(trees, h, function (t) { return t.fruit > 0.4; });
-          } else if (h.wood >= 4 && h.intel > 28 && houses.length < 14) {
-            h.state = 'build';
-            h.target = { x: h.x + rand(-70, 70), y: h.y + rand(-70, 70) };
-          } else if (h.intel > 24 && h.age > 720 && h.energy > 60) {
-            h.state = 'social';
-            h.target = nearest(humans, h, function (o) {
-              return o !== h && !o.dead && o.gender !== h.gender && o.age > 720;
-            });
-          } else if (h.wood < 4 && h.intel > 16) {
-            h.state = 'chop';
-            h.target = nearest(trees, h, function (t) { return t.wood > 0.4 && t.size > 0.45; });
-          } else {
-            h.state = 'wander';
-            h.target = { x: rand(30, W - 30), y: rand(30, H - 30) };
+        // Husband stays at home with wife while she raises the child
+        if (h.state === 'home') {
+          h.hunger += 0.0006 * dt;
+          h.energy = Math.min(100, h.energy + 0.0005 * dt);
+          if (h.spouse && h.spouse.dead) {
+            clearSpouse(h);
+            h.state = 'wander'; h.think = 2; h.target = null;
+            return;
           }
+          var homePos = h.home || (h.spouse && h.spouse.home) || nearestHouse(h);
+          if (homePos) {
+            h.home = homePos;
+            var hd2 = dist(h, homePos);
+            if (hd2 > 14) {
+              var dx2 = homePos.x - h.x, dy2 = homePos.y - h.y, d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+              h.x += (dx2 / d2) * 11 * dt;
+              h.y += (dy2 / d2) * 11 * dt;
+            }
+          }
+          // When spouse is no longer resting, resume normal life (still married)
+          if (h.spouse && !h.spouse.resting && h.spouse.state !== 'rest') {
+            h.state = 'wander';
+            h.think = 3;
+            h.target = null;
+          }
+          if (h.energy <= 0 || h.age > h.maxAge) { h.dead = true; clearSpouse(h); return; }
+          return;
+        }
+
+        h.hunger += 0.0012 * dt;
+        h.energy -= 0.0005 * dt;
+        if (h.hunger > 85) h.energy -= 0.002 * dt;
+        if (h.energy <= 0 || h.age > h.maxAge) { clearSpouse(h); h.dead = true; return; }
+
+        if (h.state === 'forage' || h.state === 'build' || h.state === 'eat' || h.state === 'chop' || h.state === 'farm' || h.state === 'social') {
+          h.intel = Math.min(100, h.intel + 0.0004 * dt);
+        } else {
+          h.intel = Math.min(100, h.intel + 0.0001 * dt);
+        }
+
+        if (!h.votedColony && h.age > MATURE_AGE * 0.4 && Math.random() < 0.002 * dt) {
+          tryColonyVote(h);
+        }
+
+        // Anti-stuck
+        if (h.stateTime > 40) {
+          var mating = h.state === 'social' && h.mateTarget && !h.mateTarget.dead;
+          if (!mating) {
+            h.target = null;
+            h.think = 0;
+            h.stateTime = 0;
+            if (h.state === 'chop' || h.state === 'forage') h.state = 'wander';
+          } else if (h.stateTime > 120) {
+            h.target = null; h.mateTarget = null; h.think = 0; h.stateTime = 0; h.state = 'wander';
+          }
+        }
+
+        clearInvalidTarget(h);
+
+        if (h.think <= 0 || (!h.target && h.state !== 'wander' && h.state !== 'eat' && h.state !== 'build' && h.state !== 'rest')) {
+          decide(h);
         }
         h.think -= dt;
 
+        // --- Act ---
         if (h.state === 'eat' && h.food > 0) {
-          h.food -= 0.006 * dt;
-          h.hunger = Math.max(0, h.hunger - 0.018 * dt);
-          h.energy = Math.min(100, h.energy + 0.01 * dt);
-          if (h.hunger < 22) { h.state = 'wander'; h.target = null; }
+          h.food -= 0.007 * dt;
+          h.hunger = Math.max(0, h.hunger - 0.02 * dt);
+          h.energy = Math.min(100, h.energy + 0.012 * dt);
+          if (h.hunger < 18) { h.state = 'wander'; h.think = 0; }
           return;
         }
 
-        var tx = h.target ? h.target.x : h.x, ty = h.target ? h.target.y : h.y;
-        var dx = tx - h.x, dy = ty - h.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-        // Slow movement (pixels per sim-second)
-        var spd = 4.5 + h.intel * 0.03;
-        if (houses.some(function (hs) { return dist(h, hs) < 40; })) spd *= 1.12;
-        h.vx = (dx / d) * spd;
-        h.vy = (dy / d) * spd;
-        h.x += h.vx * dt;
-        h.y += h.vy * dt;
-        h.x = Math.max(12, Math.min(W - 12, h.x));
-        h.y = Math.max(12, Math.min(H - 12, h.y));
+        var dest = null;
+        if (h.state === 'wander') dest = h.wanderTo;
+        else if (h.state === 'build' && h.buildSite) dest = h.buildSite;
+        else if (h.target) dest = h.target;
 
-        if (d < 16) {
-          if (h.state === 'forage') {
-            if (h.target && h.target.fruit !== undefined) {
-              if (h.target.fruit > 0) {
-                h.target.fruit -= 0.012 * dt;
-                h.food += 0.009 * dt;
-                h.hunger = Math.max(0, h.hunger - 0.008 * dt);
-                h.intel = Math.min(100, h.intel + 0.0006 * dt);
-              }
-            } else if (h.target && h.target.food !== undefined) {
-              if (h.target.food > 0) {
-                h.target.food -= 0.015 * dt;
-                h.food += 0.012 * dt;
-                h.hunger = Math.max(0, h.hunger - 0.01 * dt);
-              }
-            }
-            if (h.target && ((h.target.fruit !== undefined && h.target.fruit <= 0) ||
-                (h.target.food !== undefined && h.target.food <= 0.15))) {
-              h.target = null; h.think = 0;
-            }
-          } else if (h.state === 'chop' && h.target && h.target.wood > 0) {
-            h.target.wood -= 0.008 * dt;
-            h.wood += 0.006 * dt;
-            h.intel = Math.min(100, h.intel + 0.0005 * dt);
-            if (h.target.wood <= 0) { h.target = null; h.think = 0; }
-          } else if (h.state === 'build' && h.wood >= 4) {
-            houses.push({ x: h.x, y: h.y, level: 1 + Math.floor(h.intel / 45) });
-            h.wood -= 4;
-            h.intel = Math.min(100, h.intel + 0.8); // small permanent boost for building
-            h.state = 'wander'; h.target = null;
-            showToast('House built (IQ ' + Math.round(h.intel) + ')');
-          } else if (h.state === 'social' && h.target && !h.target.dead) {
-            tryReproduce(h, h.target);
-            h.think = 20;
-          } else {
-            h.target = null; h.think = 0;
+        if (dest && dest.x != null) {
+          var dx = dest.x - h.x, dy = dest.y - h.y;
+          var d = Math.sqrt(dx * dx + dy * dy) || 1;
+          var spd = 16 + h.intel * 0.08;
+          if (h.hunger > 60) spd *= 0.6;
+          else if (h.hunger > 40) spd *= 0.85;
+          h.x += (dx / d) * spd * dt;
+          h.y += (dy / d) * spd * dt;
+          h.x = Math.max(16, Math.min(W - 16, h.x));
+          h.y = Math.max(16, Math.min(H - 16, h.y));
+
+          if (h.state === 'wander' && d < 18) {
+            h.wanderTo = pickWanderPoint(h);
+            // After arriving, maybe decide to chop or socialize
+            if (Math.random() < 0.35) h.think = 0;
           }
+
+          if (d < 20) {
+            if (h.state === 'forage' && h.target) {
+              if (h.target.type === 'farm' && (h.target.food || 0) > 0) {
+                h.target.food -= 0.015 * dt;
+                h.food += 0.014 * dt;
+                h.hunger = Math.max(0, h.hunger - 0.01 * dt);
+              } else if (h.target.fruit !== undefined && h.target.fruit > 0) {
+                h.target.fruit -= 0.014 * dt;
+                h.food += 0.01 * dt;
+                h.hunger = Math.max(0, h.hunger - 0.008 * dt);
+              } else if (h.target.food !== undefined && h.target.type === undefined && h.target.food > 0) {
+                h.target.food -= 0.016 * dt;
+                h.food += 0.013 * dt;
+                h.hunger = Math.max(0, h.hunger - 0.01 * dt);
+              } else {
+                h.target = null; h.think = 0;
+              }
+            } else if (h.state === 'farm' && h.target && h.target.type === 'farm') {
+              h.target.food = Math.min(12, (h.target.food || 0) + 0.02 * dt);
+              h.food += 0.004 * dt;
+              if (Math.random() < 0.002 * dt) { h.target = null; h.think = 0; }
+            } else if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0) {
+              h.target.wood -= 0.01 * dt;
+              h.wood += 0.009 * dt;
+              if (h.target.wood <= 0) {
+                h.target = null;
+                h.state = 'wander';
+                h.think = 3 + rand(0, 5);
+              }
+              // Don't auto-build here — wait for next decide() with probability
+            } else if (h.state === 'build' && h.buildSite) {
+              if (d < 18) {
+                h.buildProgress = (h.buildProgress || 0) + dt;
+                if (h.buildProgress >= BUILD_TIME) finishBuilding(h);
+              }
+            } else if (h.state === 'social') {
+              // Only spouse is a valid mate
+              var mate = (h.spouse && !h.spouse.dead) ? h.spouse :
+                (h.mateTarget && !h.mateTarget.dead ? h.mateTarget : null);
+              if (mate && h.spouse && h.spouse !== mate) mate = h.spouse;
+              if (h.target && (h.target.type === 'house' || h.target.type === 'capitol')) {
+                if (mate && dist(h, h.target) < 30 && dist(mate, h.target) < 36) {
+                  tryReproduce(h, mate);
+                  return;
+                }
+              } else if (mate && mate === h.spouse) {
+                tryTrade(h, mate);
+                // Married couples without a house nearby just stay close
+                if (dist(h, mate) < 30 && Math.random() < 0.015 * dt) {
+                  h.state = 'wander'; h.think = 5;
+                }
+              } else if (h.target && h.target.gender && !h.spouse) {
+                // Unmarried trade only — never date someone's spouse
+                if (!h.target.spouse || h.target.spouse.dead) tryTrade(h, h.target);
+                if (Math.random() < 0.02 * dt) {
+                  h.state = 'wander'; h.target = null; h.think = 4;
+                  h.wanderTo = pickWanderPoint(h);
+                }
+              }
+            }
+          }
+        } else if (h.state !== 'eat') {
+          // No destination — force re-decide soon
+          h.think = Math.min(h.think, 2);
         }
       }
 
       function updateWorld(dt) {
-        // dt = sim-seconds
-        day += dt / 120; // 1 "day" ≈ 2 real minutes at 1x
+        day += dt / 120;
         plants.forEach(function (p) {
           p.stage = Math.min(1.5, p.stage + 0.00012 * dt);
           if (p.stage > 0.55) p.food = Math.min(3, p.food + 0.00018 * dt);
@@ -4797,14 +5510,44 @@
           t.size = Math.min(1.35, t.size + 0.000035 * dt);
           if (t.size > 0.55) {
             t.fruit = Math.min(5, t.fruit + 0.00012 * dt);
-            t.wood = Math.min(8, t.wood + 0.00007 * dt);
+            t.wood = Math.min(9, t.wood + 0.00008 * dt);
           }
         });
-        if (Math.random() < 0.0006 * dt && plants.length < 45) {
-          plants.push({ x: rand(20, W - 20), y: rand(20, H - 20), stage: 0.08, food: 0.15 });
+        // Trees cannot exist on buildings — continuously clear
+        if (buildings.length) {
+          trees = trees.filter(function (t) {
+            for (var i = 0; i < buildings.length; i++) {
+              if (dist(t, buildings[i]) < BUILD_CLEAR * 0.85) return false;
+            }
+            return true;
+          });
         }
+        if (colony && colony.formed) {
+          buildings.forEach(function (b) {
+            if (b.type === 'farm') b.food = Math.min(12, (b.food || 0) + 0.004 * dt);
+          });
+        }
+        // New plants only in clear areas
+        if (Math.random() < 0.0005 * dt && plants.length < 50) {
+          var px = rand(30, W - 30), py = rand(30, H - 30);
+          var blocked = buildings.some(function (b) { return dist(b, { x: px, y: py }) < 28; });
+          if (!blocked) plants.push({ x: px, y: py, stage: 0.1, food: 0.2 });
+        }
+        // New tree regrowth only off buildings
+        if (Math.random() < 0.00015 * dt && trees.length < 22) {
+          var tx = rand(40, W - 40), ty = rand(40, H - 40);
+          if (!siteBlocked(tx, ty)) {
+            trees.push({ x: tx, y: ty, size: 0.2, fruit: 0, wood: 1.5, age: 0 });
+          }
+        }
+
         humans.forEach(function (h) { updateHuman(h, dt); });
         humans = humans.filter(function (h) { return !h.dead; });
+        if (colony) {
+          colony.members = colony.members.filter(function (id) {
+            return humans.some(function (h) { return h.id === id; });
+          });
+        }
         plants = plants.filter(function (p) { return p.food > 0.04 || p.stage < 1.1; });
         updateHud();
       }
@@ -4812,12 +5555,70 @@
       function updateHud() {
         var pop = humans.length;
         var iq = pop ? Math.round(humans.reduce(function (s, h) { return s + h.intel; }, 0) / pop) : 0;
+        var totalWood = humans.reduce(function (s, h) { return s + h.wood; }, 0);
+        var farms = buildings.filter(function (b) { return b.type === 'farm'; }).length;
         win.el.querySelector('#gen-pop').textContent = pop;
         win.el.querySelector('#gen-iq').textContent = iq;
         win.el.querySelector('#gen-gen').textContent = maxGen;
-        win.el.querySelector('#gen-trees').textContent = trees.length;
-        win.el.querySelector('#gen-houses').textContent = houses.length;
+        win.el.querySelector('#gen-wood').textContent = totalWood.toFixed(0);
+        win.el.querySelector('#gen-farms').textContent = farms;
+        win.el.querySelector('#gen-colony').textContent = colony && colony.formed
+          ? 'Yes (' + colony.members.length + ')'
+          : (colony ? colony.votesYes + '/10 yes' : '—');
         win.el.querySelector('#gen-day').textContent = Math.floor(day);
+      }
+
+      function drawBuilding(b) {
+        if (b.type === 'capitol') {
+          ctx.fillStyle = '#6a4c9c';
+          ctx.fillRect(b.x - 18, b.y - 14, 36, 28);
+          ctx.fillStyle = '#c9a227';
+          ctx.beginPath();
+          ctx.moveTo(b.x - 20, b.y - 14);
+          ctx.lineTo(b.x, b.y - 32);
+          ctx.lineTo(b.x + 20, b.y - 14);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.font = '10px Inter,sans-serif';
+          ctx.fillText('CAPITOL', b.x - 22, b.y + 28);
+        } else if (b.type === 'farm') {
+          ctx.fillStyle = '#8d6e3f';
+          ctx.fillRect(b.x - 16, b.y - 8, 32, 16);
+          ctx.fillStyle = '#7cb342';
+          for (var i = -2; i <= 2; i++) ctx.fillRect(b.x + i * 6 - 2, b.y - 14, 3, 8);
+          ctx.fillStyle = '#cddc39';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('FARM', b.x - 14, b.y + 20);
+        } else if (b.type === 'storage') {
+          ctx.fillStyle = '#5d4037';
+          ctx.fillRect(b.x - 14, b.y - 12, 28, 24);
+          ctx.fillStyle = '#a1887f';
+          ctx.fillRect(b.x - 10, b.y - 6, 8, 10);
+          ctx.fillStyle = '#ffe0b2';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('STORE', b.x - 16, b.y + 22);
+        } else if (b.type === 'workshop') {
+          ctx.fillStyle = '#455a64';
+          ctx.fillRect(b.x - 14, b.y - 12, 28, 24);
+          ctx.fillStyle = '#ff8a65';
+          ctx.beginPath();
+          ctx.arc(b.x + 4, b.y - 4, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#b0bec5';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('SHOP', b.x - 14, b.y + 22);
+        } else {
+          ctx.fillStyle = '#5a3a22';
+          ctx.fillRect(b.x - 14, b.y - 10, 28, 20);
+          ctx.fillStyle = '#8b5a2b';
+          ctx.beginPath();
+          ctx.moveTo(b.x - 16, b.y - 10);
+          ctx.lineTo(b.x, b.y - 22 - (b.level || 1) * 2);
+          ctx.lineTo(b.x + 16, b.y - 10);
+          ctx.fill();
+          ctx.fillStyle = '#ffcc66';
+          ctx.fillRect(b.x - 4, b.y - 2, 5, 6);
+        }
       }
 
       function draw() {
@@ -4826,23 +5627,31 @@
         g.addColorStop(1, '#0f2818');
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
-
         ctx.strokeStyle = 'rgba(255,255,255,0.03)';
         ctx.lineWidth = 1;
         for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
         for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
 
-        houses.forEach(function (hs) {
-          ctx.fillStyle = '#5a3a22';
-          ctx.fillRect(hs.x - 14, hs.y - 10, 28, 20);
-          ctx.fillStyle = '#8b5a2b';
+        if (colony && colony.formed && colony.capital) {
+          ctx.strokeStyle = 'rgba(201,162,39,0.25)';
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(hs.x - 16, hs.y - 10);
-          ctx.lineTo(hs.x, hs.y - 22 - hs.level * 2);
-          ctx.lineTo(hs.x + 16, hs.y - 10);
-          ctx.fill();
-          ctx.fillStyle = '#ffcc66';
-          ctx.fillRect(hs.x - 4, hs.y - 2, 5, 6);
+          ctx.arc(colony.capital.x, colony.capital.y, 100, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        buildings.forEach(drawBuilding);
+
+        // Construction sites
+        humans.forEach(function (h) {
+          if (h.buildSite) {
+            var pr = Math.min(1, (h.buildProgress || 0) / BUILD_TIME);
+            ctx.strokeStyle = 'rgba(0,212,255,0.6)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(h.buildSite.x - 16, h.buildSite.y - 12, 32, 24);
+            ctx.fillStyle = 'rgba(0,212,255,0.25)';
+            ctx.fillRect(h.buildSite.x - 16, h.buildSite.y - 12, 32 * pr, 24);
+          }
         });
 
         plants.forEach(function (p) {
@@ -4877,6 +5686,18 @@
         });
 
         humans.forEach(function (h) {
+          if (h.carriedBy) {
+            // Small baby next to mother
+            ctx.fillStyle = h.color;
+            ctx.beginPath();
+            ctx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffe0b2';
+            ctx.beginPath();
+            ctx.arc(h.x, h.y - 5, 3, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+          }
           ctx.fillStyle = h.color;
           ctx.beginPath();
           ctx.arc(h.x, h.y, 7, 0, Math.PI * 2);
@@ -4885,12 +5706,38 @@
           ctx.beginPath();
           ctx.arc(h.x, h.y - 9, 5, 0, Math.PI * 2);
           ctx.fill();
-          if (h.intel > 35) {
-            ctx.strokeStyle = 'rgba(100,200,255,' + Math.min(1, (h.intel - 35) / 55) + ')';
+          if (h.resting) {
+            ctx.fillStyle = 'rgba(255,200,100,0.35)';
+            ctx.beginPath();
+            ctx.arc(h.x, h.y - 4, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffcc66';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('REST', h.x - 12, h.y - 22);
+          }
+          if (h.state === 'home') {
+            ctx.fillStyle = '#90caf9';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('HOME', h.x - 14, h.y - 22);
+          }
+          // Marriage ring mark
+          if (h.spouse && !h.spouse.dead) {
+            ctx.strokeStyle = 'rgba(255, 215, 100, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(h.x + 6, h.y + 2, 3, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          if (h.intel > 38) {
+            ctx.strokeStyle = 'rgba(100,200,255,' + Math.min(1, (h.intel - 38) / 50) + ')';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(h.x, h.y - 9, 8, 0, Math.PI * 2);
             ctx.stroke();
+          }
+          if (h.colonyYes && colony && !colony.formed) {
+            ctx.fillStyle = '#c9a227';
+            ctx.fillRect(h.x - 3, h.y - 20, 6, 3);
           }
           ctx.fillStyle = h.gender === 'm' ? '#4fc3f7' : '#f48fb1';
           ctx.fillRect(h.x - 2, h.y + 6, 4, 3);
@@ -4907,34 +5754,45 @@
           var lifeLeft = Math.max(0, selected.maxAge - selected.age);
           var mins = Math.floor(lifeLeft / 60);
           var secs = Math.floor(lifeLeft % 60);
-          ctx.fillStyle = 'rgba(0,0,0,0.75)';
-          ctx.fillRect(8, 8, 220, 92);
+          var bp = selected.buildSite ? Math.floor(((selected.buildProgress || 0) / BUILD_TIME) * 100) : 0;
+          ctx.fillStyle = 'rgba(0,0,0,0.78)';
+          ctx.fillRect(8, 8, 250, 108);
           ctx.fillStyle = '#e8e8f0';
           ctx.font = '12px Inter, sans-serif';
-          ctx.fillText('Human #' + selected.id + '  Gen ' + selected.gen, 16, 24);
+          ctx.fillText('Human #' + selected.id + '  Gen ' + selected.gen +
+            (selected.spouse && !selected.spouse.dead ? '  ♥#' + selected.spouse.id : '  single') +
+            (selected.resting ? '  REST' : '') +
+            (selected.carriedBy ? '  (baby)' : '') +
+            (selected.colonyYes ? '  ✓' : ''), 16, 24);
           ctx.fillText('IQ ' + Math.round(selected.intel) + '  Energy ' + Math.round(selected.energy), 16, 42);
           ctx.fillText('Hunger ' + Math.round(selected.hunger) + '  Age ' + Math.floor(selected.age / 60) + 'm', 16, 60);
-          ctx.fillText('Life left ~' + mins + 'm ' + secs + 's  ·  ' + selected.state, 16, 78);
-          ctx.fillText('Wood ' + selected.wood.toFixed(1) + '  Food ' + selected.food.toFixed(1), 16, 94);
+          ctx.fillText('Life ~' + mins + 'm ' + secs + 's  ·  ' + selected.state + (bp ? ' ' + bp + '%' : ''), 16, 78);
+          ctx.fillText('Wood ' + selected.wood.toFixed(1) + ' / ' + WOOD_FOR_HOUSE + '  Food ' + selected.food.toFixed(1), 16, 96);
         }
       }
 
       function loop(now) {
         if (win.closed) return;
-        var realDt = Math.min(0.1, (now - lastTs) / 1000); // real seconds, cap
+        var realDt = Math.min(0.1, (now - lastTs) / 1000);
         lastTs = now;
-        if (running) {
-          var simDt = realDt * speed;
-          updateWorld(simDt);
-        }
+        if (running) updateWorld(realDt * speed);
         draw();
         requestAnimationFrame(loop);
       }
 
-      win.el.querySelector('#gen-spawn').addEventListener('click', function () { spawnHuman(false); sfx('click'); });
-      win.el.querySelector('#gen-smart').addEventListener('click', function () { spawnHuman(true); sfx('click'); showToast('Smart human spawned'); });
+      win.el.querySelector('#gen-spawn').addEventListener('click', function () {
+        var h = spawnHuman(maxGen > 0 ? maxGen : 0, null);
+        if (maxGen > 0) {
+          h.gen = maxGen;
+          h.intel = Math.min(95, 30 + maxGen * 2 + rand(-1, 3));
+        }
+        sfx('click');
+      });
       win.el.querySelector('#gen-plant').addEventListener('click', function () {
-        plants.push({ x: rand(30, W - 30), y: rand(30, H - 30), stage: 0.25, food: 0.4 });
+        var px = rand(40, W - 40), py = rand(40, H - 40);
+        if (!buildings.some(function (b) { return dist(b, { x: px, y: py }) < 28; })) {
+          plants.push({ x: px, y: py, stage: 0.25, food: 0.4 });
+        }
         sfx('click');
       });
       win.el.querySelector('#gen-pause').addEventListener('click', function () {
@@ -4954,7 +5812,7 @@
         var mx = (e.clientX - r.left) * (W / r.width);
         var my = (e.clientY - r.top) * (H / r.height);
         selected = null;
-        var best = 22;
+        var best = 24;
         humans.forEach(function (h) {
           var d = Math.hypot(h.x - mx, h.y - my);
           if (d < best) { best = d; selected = h; }
@@ -4963,7 +5821,7 @@
 
       seedWorld();
       requestAnimationFrame(loop);
-    }, 50);
+    })();
   }
 
   function openSolitaire() {
