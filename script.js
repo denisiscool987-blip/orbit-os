@@ -4641,7 +4641,7 @@
           votedColony: false, colonyYes: false,
           home: null, buildSite: null, buildProgress: 0, buildType: null,
           stateTime: 0, tradeCool: 0, kids: 0,
-          resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null,
+          resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null, adoptiveMotherId: null,
           spouse: null, mateTarget: null, babyReadyAt: 0
         };
         humans.push(h);
@@ -4741,24 +4741,72 @@
 
       function areKin(a, b) {
         if (!a || !b || a === b) return true;
-        // Parent ↔ child
+        // Only block parent ↔ child (siblings may date)
         if (a.motherId === b.id || a.fatherId === b.id) return true;
         if (b.motherId === a.id || b.fatherId === a.id) return true;
-        // Siblings (share a parent)
-        if (a.motherId && a.motherId === b.motherId) return true;
-        if (a.fatherId && a.fatherId === b.fatherId) return true;
-        // Grandparent-ish: one is parent of the other's parent
-        if (a.motherId && (b.motherId === a.motherId || b.fatherId === a.motherId)) return true;
-        if (a.fatherId && (b.motherId === a.fatherId || b.fatherId === a.fatherId)) return true;
-        if (b.motherId && (a.motherId === b.motherId || a.fatherId === b.motherId)) return true;
-        if (b.fatherId && (a.motherId === b.fatherId || a.fatherId === b.fatherId)) return true;
+        // Adoptive parent
+        if (a.adoptiveMotherId === b.id || b.adoptiveMotherId === a.id) return true;
         return false;
+      }
+
+      function findAdoptiveMother(orphan) {
+        // Prefer resting mothers, then any adult female not overloaded
+        var candidates = humans.filter(function (o) {
+          return o !== orphan && !o.dead && o.gender === 'f' &&
+            o.age >= MATURE_AGE && !o.carriedBy &&
+            o.id !== orphan.motherId && o.id !== orphan.fatherId;
+        });
+        if (!candidates.length) return null;
+        candidates.sort(function (a, b) {
+          // Prefer already resting (raising kids), then lower kid count, then nearer
+          var ra = (a.resting || a.state === 'rest') ? 0 : 1;
+          var rb = (b.resting || b.state === 'rest') ? 0 : 1;
+          if (ra !== rb) return ra - rb;
+          var ka = (a.carryingList ? a.carryingList.length : 0) + (a.kids || 0);
+          var kb = (b.carryingList ? b.carryingList.length : 0) + (b.kids || 0);
+          if (ka !== kb) return ka - kb;
+          return dist(orphan, a) - dist(orphan, b);
+        });
+        return candidates[0];
+      }
+
+      function adoptOrphan(child) {
+        if (!child || child.dead || child.age >= MATURE_AGE) return false;
+        var mom = findAdoptiveMother(child);
+        if (!mom) {
+          // No mother available — child wanders alone (risky)
+          child.carriedBy = null;
+          child.state = 'wander';
+          child.think = 2;
+          showToast('Orphan #' + child.id + ' alone — no mother found');
+          return false;
+        }
+        child.carriedBy = mom;
+        child.adoptiveMotherId = mom.id;
+        child.state = 'carried';
+        child.x = mom.x + 5;
+        child.y = mom.y - 8;
+        if (!mom.carryingList) mom.carryingList = [];
+        if (mom.carryingList.indexOf(child) < 0) mom.carryingList.push(child);
+        mom.carrying = mom.carrying || child;
+        mom.resting = true;
+        mom.state = 'rest';
+        mom.think = 9999;
+        if (mom.home) mom.target = mom.home;
+        // If she has a spouse, he helps feed
+        if (mom.spouse && !mom.spouse.dead) {
+          mom.spouse.state = 'home';
+          mom.spouse.think = 9999;
+        }
+        showToast('Mother #' + mom.id + ' adopted orphan #' + child.id);
+        sfx('success');
+        return true;
       }
 
       function formCouple(a, b) {
         if (!a || !b || a.dead || b.dead) return false;
         if (a.gender === b.gender) return false;
-        if (areKin(a, b)) return false; // no siblings / parent-child pairs
+        if (areKin(a, b)) return false; // no parent-child pairs
         if (a.spouse && a.spouse !== b && !a.spouse.dead) return false;
         if (b.spouse && b.spouse !== a && !b.spouse.dead) return false;
         a.spouse = b;
@@ -5363,15 +5411,22 @@
         if (h.cool > 0) h.cool -= dt;
         if (h.tradeCool > 0) h.tradeCool -= dt;
 
-        // Carried babies: stay with mother, no independent actions
+        // Carried babies: stay with mother (or adoptive mother)
         if (h.carriedBy) {
           var mom = h.carriedBy;
           if (!mom || mom.dead) {
-            h.carriedBy = null; h.state = 'wander'; h.think = 0;
+            // Birth mother died mid-childhood → another mother takes them in
+            h.carriedBy = null;
+            if (h.age < MATURE_AGE && !h.dead) {
+              adoptOrphan(h);
+            } else {
+              h.state = 'wander';
+              h.think = 0;
+            }
           } else {
             h.x = mom.x + 5;
             h.y = mom.y - 8;
-            h.hunger = Math.max(0, h.hunger - 0.002 * dt); // fed by mother
+            h.hunger = Math.max(0, h.hunger - 0.002 * dt);
             h.energy = Math.min(100, h.energy + 0.001 * dt);
             if (h.age >= MATURE_AGE) releaseChild(mom, h);
           }
@@ -5389,13 +5444,27 @@
             h.hunger = Math.max(0, h.hunger - 0.045 * dt);
           }
           if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
-            if (h.carrying) { h.carrying.carriedBy = null; h.carrying = null; }
+            // Mother died while raising — try to find adoptive mothers for each child
+            var orphans = [];
+            if (h.carryingList && h.carryingList.length) {
+              orphans = h.carryingList.slice();
+            } else if (h.carrying) {
+              orphans = [h.carrying];
+            }
+            h.carrying = null;
+            h.carryingList = null;
             if (h.spouse && !h.spouse.dead) {
               h.spouse.state = 'wander';
               h.spouse.think = 2;
             }
             clearSpouse(h);
             h.dead = true;
+            orphans.forEach(function (c) {
+              if (c && !c.dead && c.age < MATURE_AGE) {
+                c.carriedBy = null;
+                adoptOrphan(c);
+              }
+            });
             return;
           }
           // Stay at house
