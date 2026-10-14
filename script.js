@@ -4599,9 +4599,11 @@
       var colony = null;
       var lastTs = performance.now();
       var LIFE_SEC = 7200;
-      var MATURE_AGE = 900; // ~15 min at 1x — childhood ends / can leave house
+      var MATURE_AGE = 300; // 5 min at 1x — child leaves house / stops being carried
+      var REPRO_AGE = 1200; // 20 min at 1x — can form couple & have kids
       var REPRO_COOL = 1200; // 20 min between births at 1x
-      var WOOD_FOR_HOUSE = 10;
+      var MAX_KIDS = 6; // per couple
+      var WOOD_FOR_HOUSE = 5; // house & farm cost 5; other buildings 10
       var HUNGER_DEATH = 50; // starve at 50 — farms required to survive
       var BUILD_CLEAR = 38;
       var BUILD_TIME = 55; // sim-seconds to finish construction
@@ -4753,7 +4755,7 @@
         // Prefer resting mothers, then any adult female not overloaded
         var candidates = humans.filter(function (o) {
           return o !== orphan && !o.dead && o.gender === 'f' &&
-            o.age >= MATURE_AGE && !o.carriedBy &&
+            o.age >= REPRO_AGE && !o.carriedBy &&
             o.id !== orphan.motherId && o.id !== orphan.fatherId;
         });
         if (!candidates.length) return null;
@@ -4853,7 +4855,7 @@
         if (a.cool > 0 || b.cool > 0) return false;
         if (a.gender === b.gender) return false;
         if (areKin(a, b)) return false;
-        if (a.age < MATURE_AGE || b.age < MATURE_AGE) return false;
+        if (a.age < REPRO_AGE || b.age < REPRO_AGE) return false;
         if (a.energy < 35 || b.energy < 35) return false;
         if (dist(a, b) > 42) return false;
         if (a.spouse && a.spouse !== b) return false;
@@ -5021,7 +5023,7 @@
             h.state === 'build' &&
             h.buildSite &&
             (h.buildProgress || 0) > 0 &&
-            (h.wood || 0) >= 10;
+            (h.wood || 0) >= WOOD_FOR_HOUSE;
         });
         if (!colony) {
           colony = { name: 'New Colony', capital: null, members: [], formed: false, buildersSeen: 0 };
@@ -5130,10 +5132,9 @@
       }
 
       function buildCost(type) {
-        if (type === 'workshop') return 14;
-        if (type === 'storage') return 12;
-        if (type === 'farm') return 10;
-        return WOOD_FOR_HOUSE;
+        if (type === 'workshop' || type === 'storage' || type === 'capitol') return 10;
+        // house & farm
+        return WOOD_FOR_HOUSE; // 5
       }
 
       function startBuilding(h) {
@@ -5296,7 +5297,7 @@
             : ((!h.babyReadyAt || h.age >= h.babyReadyAt) && (!sp.babyReadyAt || sp.age >= sp.babyReadyAt));
           var tryChance = needKid ? 0.65 : 0.18;
           if (ready && h.cool <= 0 && sp.cool <= 0 && h.energy >= 35 && sp.energy >= 35 &&
-              (h.kids || 0) < 4 && !sp.carrying && Math.random() < tryChance) {
+              (h.kids || 0) < MAX_KIDS && !sp.carrying && Math.random() < tryChance) {
             var famHouse = h.home || sp.home;
             if (famHouse && isFamilyHouse(famHouse) &&
                 (!famHouse.ownerIds || !famHouse.ownerIds.length ||
@@ -5323,13 +5324,13 @@
         }
 
         // 3b) Singles: bond only if a FREE house exists (1 couple per house)
-        if (!h.spouse && h.age >= MATURE_AGE && Math.random() < 0.25 &&
+        if (!h.spouse && h.age >= REPRO_AGE && Math.random() < 0.25 &&
             h.energy >= 35 && !h.carrying) {
           var freeHouse = nearestFreeHouse(h);
           if (freeHouse) {
             var partner = nearest(humans, h, function (o) {
               return o !== h && !o.dead && o.gender !== h.gender &&
-                o.age >= MATURE_AGE && o.energy >= 35 &&
+                o.age >= REPRO_AGE && o.energy >= 35 &&
                 !o.resting && !o.carrying && !o.carriedBy &&
                 (!o.spouse || o.spouse.dead) &&
                 !areKin(h, o);
