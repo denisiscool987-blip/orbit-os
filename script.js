@@ -2059,7 +2059,7 @@
     genesis: {
       title: 'Orbit Genesis', icon: '🌍', width: 940, height: 680,
       content: function () {
-        return '<div class="genesis-wrap">' +'<div class="genesis-hud">' +'<span>Pop: <strong id="gen-pop">0</strong></span>' +'<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +'<span>Gen: <strong id="gen-gen">0</strong></span>' +'<span>Wood: <strong id="gen-wood">0</strong></span>' +'<span>Farms: <strong id="gen-farms">0</strong></span>' +'<span>Colony: <strong id="gen-colony">—</strong></span>' +'<span>Day: <strong id="gen-day">0</strong></span>' +'</div>' +'<canvas id="gen-canvas" width="900" height="520"></canvas>' +'<div class="game-btn-row gen-controls">' +'<button type="button" id="gen-spawn">👤 Spawn Human</button>' +'<button type="button" id="gen-plant">🌱 Plant Seed</button>' +'<button type="button" id="gen-pause">Pause</button>' +'<button type="button" id="gen-speed">Speed 1x</button>' +'<button type="button" id="gen-clear">Reset World</button>' +'</div>' +'<p class="gen-help">1 couple per house · settle then random births · monogamy · mother rests · 20min cooldown</p>' +'</div>';
+        return '<div class="genesis-wrap">' +'<div class="genesis-hud">' +'<span>Pop: <strong id="gen-pop">0</strong></span>' +'<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +'<span>Gen: <strong id="gen-gen">0</strong></span>' +'<span>Wood: <strong id="gen-wood">0</strong></span>' +'<span>Farms: <strong id="gen-farms">0</strong></span>' +'<span>Colony: <strong id="gen-colony">—</strong></span>' +'<span>Day: <strong id="gen-day">0</strong></span>' +'</div>' +'<canvas id="gen-canvas" width="900" height="520"></canvas>' +'<div class="game-btn-row gen-controls">' +'<button type="button" id="gen-spawn">👤 Spawn Human</button>' +'<button type="button" id="gen-plant">🌱 Plant Seed</button>' +'<button type="button" id="gen-pause">Pause</button>' +'<button type="button" id="gen-speed">Speed 1x</button>' +'<button type="button" id="gen-clear">Reset World</button>' +'</div>' +'<p class="gen-help">2 builders with 10 wood each = colony · unlocks storage/workshop · father feeds resting mother</p>' +'</div>';
       },
       init: function (win) {
         initGenesis(win);
@@ -4602,6 +4602,7 @@
       var MATURE_AGE = 900; // ~15 min at 1x — childhood ends / can leave house
       var REPRO_COOL = 1200; // 20 min between births at 1x
       var WOOD_FOR_HOUSE = 10;
+      var HUNGER_DEATH = 50; // starve at 50 — farms required to survive
       var BUILD_CLEAR = 38;
       var BUILD_TIME = 55; // sim-seconds to finish construction
 
@@ -4630,7 +4631,7 @@
         }
         var h = {
           id: nextId++, x: rand(50, W - 50), y: rand(50, H - 50),
-          energy: 88 + rand(0, 12), hunger: 12 + rand(0, 12),
+          energy: 88 + rand(0, 12), hunger: 5 + rand(0, 8),
           age: 0, maxAge: LIFE_SEC + rand(0, 1200),
           intel: Math.max(28, Math.min(100, intel)),
           gender: gender,
@@ -4640,7 +4641,7 @@
           votedColony: false, colonyYes: false,
           home: null, buildSite: null, buildProgress: 0, buildType: null,
           stateTime: 0, tradeCool: 0, kids: 0,
-          resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null,
+          resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null, adoptiveMotherId: null,
           spouse: null, mateTarget: null, babyReadyAt: 0
         };
         humans.push(h);
@@ -4740,24 +4741,72 @@
 
       function areKin(a, b) {
         if (!a || !b || a === b) return true;
-        // Parent ↔ child
+        // Only block parent ↔ child (siblings may date)
         if (a.motherId === b.id || a.fatherId === b.id) return true;
         if (b.motherId === a.id || b.fatherId === a.id) return true;
-        // Siblings (share a parent)
-        if (a.motherId && a.motherId === b.motherId) return true;
-        if (a.fatherId && a.fatherId === b.fatherId) return true;
-        // Grandparent-ish: one is parent of the other's parent
-        if (a.motherId && (b.motherId === a.motherId || b.fatherId === a.motherId)) return true;
-        if (a.fatherId && (b.motherId === a.fatherId || b.fatherId === a.fatherId)) return true;
-        if (b.motherId && (a.motherId === b.motherId || a.fatherId === b.motherId)) return true;
-        if (b.fatherId && (a.motherId === b.fatherId || a.fatherId === b.fatherId)) return true;
+        // Adoptive parent
+        if (a.adoptiveMotherId === b.id || b.adoptiveMotherId === a.id) return true;
         return false;
+      }
+
+      function findAdoptiveMother(orphan) {
+        // Prefer resting mothers, then any adult female not overloaded
+        var candidates = humans.filter(function (o) {
+          return o !== orphan && !o.dead && o.gender === 'f' &&
+            o.age >= MATURE_AGE && !o.carriedBy &&
+            o.id !== orphan.motherId && o.id !== orphan.fatherId;
+        });
+        if (!candidates.length) return null;
+        candidates.sort(function (a, b) {
+          // Prefer already resting (raising kids), then lower kid count, then nearer
+          var ra = (a.resting || a.state === 'rest') ? 0 : 1;
+          var rb = (b.resting || b.state === 'rest') ? 0 : 1;
+          if (ra !== rb) return ra - rb;
+          var ka = (a.carryingList ? a.carryingList.length : 0) + (a.kids || 0);
+          var kb = (b.carryingList ? b.carryingList.length : 0) + (b.kids || 0);
+          if (ka !== kb) return ka - kb;
+          return dist(orphan, a) - dist(orphan, b);
+        });
+        return candidates[0];
+      }
+
+      function adoptOrphan(child) {
+        if (!child || child.dead || child.age >= MATURE_AGE) return false;
+        var mom = findAdoptiveMother(child);
+        if (!mom) {
+          // No mother available — child wanders alone (risky)
+          child.carriedBy = null;
+          child.state = 'wander';
+          child.think = 2;
+          showToast('Orphan #' + child.id + ' alone — no mother found');
+          return false;
+        }
+        child.carriedBy = mom;
+        child.adoptiveMotherId = mom.id;
+        child.state = 'carried';
+        child.x = mom.x + 5;
+        child.y = mom.y - 8;
+        if (!mom.carryingList) mom.carryingList = [];
+        if (mom.carryingList.indexOf(child) < 0) mom.carryingList.push(child);
+        mom.carrying = mom.carrying || child;
+        mom.resting = true;
+        mom.state = 'rest';
+        mom.think = 9999;
+        if (mom.home) mom.target = mom.home;
+        // If she has a spouse, he helps feed
+        if (mom.spouse && !mom.spouse.dead) {
+          mom.spouse.state = 'home';
+          mom.spouse.think = 9999;
+        }
+        showToast('Mother #' + mom.id + ' adopted orphan #' + child.id);
+        sfx('success');
+        return true;
       }
 
       function formCouple(a, b) {
         if (!a || !b || a.dead || b.dead) return false;
         if (a.gender === b.gender) return false;
-        if (areKin(a, b)) return false; // no siblings / parent-child pairs
+        if (areKin(a, b)) return false; // no parent-child pairs
         if (a.spouse && a.spouse !== b && !a.spouse.dead) return false;
         if (b.spouse && b.spouse !== a && !b.spouse.dead) return false;
         a.spouse = b;
@@ -4765,7 +4814,7 @@
         a.mateTarget = b;
         b.mateTarget = a;
         // Delay before they try for a baby (not instant) — 2–8 min at 1x
-        var delay = 120 + rand(0, 360);
+        var delay = 60 + rand(0, 120); // settle briefly, then push for first child
         a.babyReadyAt = a.age + delay;
         b.babyReadyAt = b.age + delay;
         showToast('Couple bonded · #' + a.id + ' & #' + b.id + ' · settling in');
@@ -4788,6 +4837,14 @@
         h.mateTarget = null;
       }
 
+      function birthCountRoll(forceOne) {
+        // Chance of twins / triplets; couples with 0 kids still get at least 1
+        var r = Math.random();
+        if (r < 0.04) return 3; // ~4% triplets
+        if (r < 0.16) return 2; // ~12% twins
+        return 1;
+      }
+
       function tryReproduce(a, b) {
         if (!a || !b || a.dead || b.dead) return false;
         if (a.resting || b.resting) return false;
@@ -4799,27 +4856,36 @@
         if (a.age < MATURE_AGE || b.age < MATURE_AGE) return false;
         if (a.energy < 35 || b.energy < 35) return false;
         if (dist(a, b) > 42) return false;
-        // Must be married to each other
         if (a.spouse && a.spouse !== b) return false;
         if (b.spouse && b.spouse !== a) return false;
         if (!a.spouse || !b.spouse) {
           if (!formCouple(a, b)) return false;
         }
 
-        // Not ready yet (settling delay after pairing / moving in)
-        if ((a.babyReadyAt && a.age < a.babyReadyAt) || (b.babyReadyAt && b.age < b.babyReadyAt)) return false;
+        var needsFirstChild = (a.kids || 0) < 1 || (b.kids || 0) < 1;
 
-        // Random — not every time they stand at the house
-        if (Math.random() > 0.12) return false;
+        // Settling delay — shorter if they still need their first child
+        if ((a.babyReadyAt && a.age < a.babyReadyAt) || (b.babyReadyAt && b.age < b.babyReadyAt)) {
+          if (!needsFirstChild) return false;
+          // First child: only wait half the settling time
+          var readyA = !a.babyReadyAt || a.age >= (a.babyReadyAt - 60);
+          var readyB = !b.babyReadyAt || b.age >= (b.babyReadyAt - 60);
+          if (!readyA || !readyB) return false;
+        }
 
-        // Own house only (1 couple per house)
+        // Random chance — much higher if couple has no kids yet (guarantee push)
+        if (needsFirstChild) {
+          if (Math.random() > 0.55) return false; // ~55% when conditions met
+        } else {
+          if (Math.random() > 0.12) return false;
+        }
+
         var house = a.home || b.home;
         if (!house || !isFamilyHouse(house)) {
           house = nearestFreeHouse(a) || nearestFreeHouse(b);
           if (house) claimHouse(a, b, house);
         }
         if (!house) return false;
-        // Ensure this house belongs to them
         if (house.ownerIds && house.ownerIds.length && houseOwnersAlive(house)) {
           if (house.ownerIds.indexOf(a.id) < 0 && house.ownerIds.indexOf(b.id) < 0) return false;
         } else {
@@ -4831,21 +4897,28 @@
         var father = a.gender === 'f' ? b : a;
         var childGen = Math.max(a.gen, b.gen) + 1;
         var avgIntel = (a.intel + b.intel) / 2;
-        var child = spawnHuman(childGen, avgIntel);
-        child.carriedBy = mother;
-        child.motherId = mother.id;
-        child.fatherId = father.id;
-        child.state = 'carried';
-        child.x = house.x + rand(-6, 6);
-        child.y = house.y + rand(-4, 4);
-        if (child.gen > maxGen) maxGen = child.gen;
-        var t = Math.min(1, child.gen / 8);
-        child.color = 'rgb(' + Math.round(252 - t * 80) + ',' + Math.round(200 - t * 40) + ',' + Math.round(128 + t * 100) + ')';
+        var nBabies = birthCountRoll(needsFirstChild);
+        var babies = [];
+        for (var bi = 0; bi < nBabies; bi++) {
+          var child = spawnHuman(childGen, avgIntel);
+          child.carriedBy = mother;
+          child.motherId = mother.id;
+          child.fatherId = father.id;
+          child.state = 'carried';
+          child.x = house.x + rand(-8, 8);
+          child.y = house.y + rand(-6, 6);
+          if (child.gen > maxGen) maxGen = child.gen;
+          var t = Math.min(1, child.gen / 8);
+          child.color = 'rgb(' + Math.round(252 - t * 80) + ',' + Math.round(200 - t * 40) + ',' + Math.round(128 + t * 100) + ')';
+          babies.push(child);
+        }
 
-        a.energy -= 10; b.energy -= 10;
-        a.cool = REPRO_COOL; b.cool = REPRO_COOL;
-        a.kids = (a.kids || 0) + 1; b.kids = (b.kids || 0) + 1;
-        // After a birth, wait again before next (on top of cool)
+        a.energy -= 8 + nBabies * 3;
+        b.energy -= 8 + nBabies * 3;
+        a.cool = REPRO_COOL;
+        b.cool = REPRO_COOL;
+        a.kids = (a.kids || 0) + nBabies;
+        b.kids = (b.kids || 0) + nBabies;
         a.babyReadyAt = a.age + REPRO_COOL + rand(60, 300);
         b.babyReadyAt = b.age + REPRO_COOL + rand(60, 300);
 
@@ -4854,7 +4927,8 @@
         claimHouse(mother, father, house);
 
         mother.resting = true;
-        mother.carrying = child;
+        mother.carrying = babies[0];
+        mother.carryingList = babies;
         mother.state = 'rest';
         mother.target = house;
         mother.think = 9999;
@@ -4865,7 +4939,8 @@
         father.think = 9999;
         father.buildSite = null;
 
-        showToast('Birth at home · Family resting · Gen ' + child.gen);
+        var label = nBabies === 3 ? 'Triplets' : (nBabies === 2 ? 'Twins' : 'Birth');
+        showToast(label + ' at home · Gen ' + childGen + ' · mother resting');
         sfx('success');
         return true;
       }
@@ -4873,26 +4948,40 @@
       function releaseChild(mother, child) {
         if (!child) return;
         child.carriedBy = null;
-        child.motherId = null;
         child.state = 'wander';
         child.think = 2;
         child.wanderTo = pickWanderPoint(child);
-        if (mother) {
+        if (!mother) {
+          showToast('Child matured · #' + child.id);
+          return;
+        }
+        // Remove from carrying list
+        if (mother.carryingList) {
+          mother.carryingList = mother.carryingList.filter(function (c) { return c !== child && !c.dead; });
+        }
+        if (mother.carrying === child) {
+          mother.carrying = (mother.carryingList && mother.carryingList[0]) || null;
+        }
+        // Mother keeps resting until ALL babies mature
+        var stillCarrying = mother.carryingList && mother.carryingList.length > 0;
+        if (!stillCarrying) {
           mother.carrying = null;
+          mother.carryingList = null;
           mother.resting = false;
           mother.state = 'wander';
           mother.target = null;
           mother.think = 4;
           mother.wanderTo = pickWanderPoint(mother);
-          // Father can leave "home" wait mode but remains spouse
           if (mother.spouse && !mother.spouse.dead && mother.spouse.state === 'home') {
             mother.spouse.state = 'wander';
             mother.spouse.target = null;
             mother.spouse.think = 4;
             mother.spouse.wanderTo = pickWanderPoint(mother.spouse);
           }
+          showToast('Children matured · left the house');
+        } else {
+          showToast('Child #' + child.id + ' matured · ' + mother.carryingList.length + ' still home');
         }
-        showToast('Child matured · left the house (#' + child.id + ')');
       }
 
       function tryTrade(a, b) {
@@ -4924,35 +5013,48 @@
         }
       }
 
-      function tryColonyVote(h) {
+      function checkColonyFromBuilders() {
         if (colony && colony.formed) return;
-        if (h.votedColony) return;
-        if (h.age < MATURE_AGE * 0.5) return;
-        if (h.intel < 32) return;
-        var nearby = humans.filter(function (o) { return o !== h && !o.dead && dist(h, o) < 90; });
-        if (nearby.length < 3 && humans.length < 10) return;
-        h.votedColony = true;
-        var yesChance = 0.35 + (h.intel - 30) * 0.012;
-        h.colonyYes = Math.random() < yesChance;
-        if (!colony) colony = { name: 'New Colony', capital: null, members: [], votesYes: 0, votesNo: 0, formed: false };
-        if (h.colonyYes) {
-          colony.votesYes++;
-          if (colony.members.indexOf(h.id) < 0) colony.members.push(h.id);
-        } else colony.votesNo++;
-        if (colony.votesYes >= 10 && !colony.formed) {
-          colony.formed = true;
-          var cx = 0, cy = 0, n = 0;
-          humans.forEach(function (hm) {
-            if (colony.members.indexOf(hm.id) >= 0) { cx += hm.x; cy += hm.y; n++; }
-          });
-          if (n > 0) { cx /= n; cy /= n; } else { cx = W / 2; cy = H / 2; }
-          // Clear trees near capitol
-          trees = trees.filter(function (t) { return dist(t, { x: cx, y: cy }) > BUILD_CLEAR; });
-          colony.capital = { x: cx, y: cy };
-          buildings.push({ type: 'capitol', x: cx, y: cy, level: 1 });
-          showToast('Colony declared! Capitol founded · Farming unlocked');
-          sfx('success');
+        // Colony = 2 people each with at least 10 wood, building at the same time
+        var builders = humans.filter(function (h) {
+          return !h.dead &&
+            h.state === 'build' &&
+            h.buildSite &&
+            (h.buildProgress || 0) > 0 &&
+            (h.wood || 0) >= 10;
+        });
+        if (!colony) {
+          colony = { name: 'New Colony', capital: null, members: [], formed: false, buildersSeen: 0 };
         }
+        colony.buildersSeen = builders.length;
+        if (builders.length < 2) return;
+
+        // Prefer two builders who are reasonably near each other
+        var pair = null;
+        for (var i = 0; i < builders.length && !pair; i++) {
+          for (var j = i + 1; j < builders.length; j++) {
+            if (dist(builders[i], builders[j]) < 200) {
+              pair = [builders[i], builders[j]];
+              break;
+            }
+          }
+        }
+        if (!pair) pair = [builders[0], builders[1]];
+
+        colony.formed = true;
+        var cx = (pair[0].x + pair[1].x) / 2;
+        var cy = (pair[0].y + pair[1].y) / 2;
+        colony.members = [pair[0].id, pair[1].id];
+        humans.forEach(function (hm) {
+          if (hm.dead) return;
+          if (colony.members.indexOf(hm.id) >= 0) return;
+          if (dist(hm, { x: cx, y: cy }) < 140) colony.members.push(hm.id);
+        });
+        trees = trees.filter(function (t) { return dist(t, { x: cx, y: cy }) > BUILD_CLEAR; });
+        colony.capital = { x: cx, y: cy };
+        buildings.push({ type: 'capitol', x: cx, y: cy, level: 1, ownerIds: [] });
+        showToast('Colony founded! 2 builders (10 wood each) · Storage & workshops unlocked');
+        sfx('success');
       }
 
       function siteBlocked(x, y, ignoreHuman) {
@@ -4971,9 +5073,10 @@
         return false;
       }
 
-      function pickBuildSite(h) {
+      function pickBuildSite(h, buildType) {
         var anchors = buildings.filter(function (b) {
-          return b.type === 'house' || b.type === 'capitol' || b.type === 'storage' || b.type === 'workshop';
+          return b.type === 'house' || b.type === 'capitol' || b.type === 'storage' ||
+            b.type === 'workshop' || b.type === 'farm';
         });
         var candidates = [];
         for (var tries = 0; tries < 50; tries++) {
@@ -4981,7 +5084,10 @@
           if (anchors.length > 0) {
             var a = anchors[Math.floor(Math.random() * anchors.length)];
             var ang = rand(0, Math.PI * 2);
-            var rad = BUILD_CLEAR + rand(2, 18);
+            // Farms sit a bit farther out; houses stay clustered
+            var rad = (buildType === 'farm')
+              ? BUILD_CLEAR + rand(18, 45)
+              : BUILD_CLEAR + rand(2, 18);
             bx = a.x + Math.cos(ang) * rad;
             by = a.y + Math.sin(ang) * rad;
           } else {
@@ -4999,16 +5105,27 @@
       }
 
       function chooseBuildType(h) {
-        if (colony && colony.formed) {
-          var hasFarm = buildings.some(function (b) { return b.type === 'farm'; });
-          var hasStorage = buildings.some(function (b) { return b.type === 'storage'; });
-          var hasWorkshop = buildings.some(function (b) { return b.type === 'workshop'; });
-          var roll = Math.random();
-          if (!hasFarm && h.intel > 34) return 'farm';
-          if (!hasStorage && h.intel > 36 && roll < 0.35) return 'storage';
-          if (!hasWorkshop && h.intel > 40 && roll < 0.25) return 'workshop';
-          if (roll < 0.2 && h.intel > 38) return 'farm';
+        var houses = buildings.filter(function (b) { return b.type === 'house'; }).length;
+        var farms = buildings.filter(function (b) { return b.type === 'farm'; }).length;
+        var roll = Math.random();
+
+        // Before colony: ONLY house or farm (no storage/workshop yet)
+        if (!colony || !colony.formed) {
+          if (houses === 0) return 'house';
+          if (farms < houses && roll < 0.55) return 'farm';
+          if (farms >= houses && roll < 0.55) return 'house';
+          return roll < 0.5 ? 'house' : 'farm';
         }
+
+        // Colony unlocked: storage & workshop available
+        var hasStorage = buildings.some(function (b) { return b.type === 'storage'; });
+        var hasWorkshop = buildings.some(function (b) { return b.type === 'workshop'; });
+        if (!hasStorage && roll < 0.45) return 'storage';
+        if (!hasWorkshop && roll < 0.4) return 'workshop';
+        if (farms === 0) return 'farm';
+        if (roll < 0.2) return 'farm';
+        if (roll < 0.4) return 'storage';
+        if (roll < 0.55) return 'workshop';
         return 'house';
       }
 
@@ -5025,7 +5142,7 @@
         var type = chooseBuildType(h);
         var cost = buildCost(type);
         if (h.wood < cost) return false;
-        var site = pickBuildSite(h);
+        var site = pickBuildSite(h, type);
         if (!site) {
           // No clear site — wander a bit, try later
           h.state = 'wander';
@@ -5105,10 +5222,10 @@
         h.stateTime = 0;
 
         // 1) Hunger (only hard-interrupt when really hungry)
-        if (h.hunger > 30 && h.food > 0.4) {
+        if (h.hunger > 18 && h.food > 0.4) {
           h.state = 'eat'; h.target = null; return;
         }
-        if (h.hunger > 45) {
+        if (h.hunger > 22) {
           h.state = 'forage';
           var farm = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.3; });
           if (farm) h.target = farm;
@@ -5149,9 +5266,10 @@
         if (h.spouse && !h.spouse.dead) {
           var sp = h.spouse;
           if (sp.resting || sp.state === 'rest') {
+            // Father's only job while she rests: gather & deliver food
             h.state = 'home';
             h.home = sp.home || h.home;
-            h.target = h.home;
+            h.target = null; // updateHuman home logic handles forage + deliver
             return;
           }
           // Claim a free house if they don't have a valid home yet (settle in — no baby yet)
@@ -5171,10 +5289,14 @@
               return;
             }
           }
-          // Occasional baby attempt — random, only when ready, only their house
-          var ready = (!h.babyReadyAt || h.age >= h.babyReadyAt) && (!sp.babyReadyAt || sp.age >= sp.babyReadyAt);
+          // Baby attempt — couples with 0 kids try much harder (guaranteed eventually)
+          var needKid = (h.kids || 0) < 1 || (sp.kids || 0) < 1;
+          var ready = needKid
+            ? (h.cool <= 0 && sp.cool <= 0)
+            : ((!h.babyReadyAt || h.age >= h.babyReadyAt) && (!sp.babyReadyAt || sp.age >= sp.babyReadyAt));
+          var tryChance = needKid ? 0.65 : 0.18;
           if (ready && h.cool <= 0 && sp.cool <= 0 && h.energy >= 35 && sp.energy >= 35 &&
-              (h.kids || 0) < 4 && !sp.carrying && Math.random() < 0.18) {
+              (h.kids || 0) < 4 && !sp.carrying && Math.random() < tryChance) {
             var famHouse = h.home || sp.home;
             if (famHouse && isFamilyHouse(famHouse) &&
                 (!famHouse.ownerIds || !famHouse.ownerIds.length ||
@@ -5227,8 +5349,8 @@
           }
         }
 
-        // 4) Mild hunger — forage when convenient
-        if (h.hunger > 30) {
+        // 4) Mild hunger — forage / use farms
+        if (h.hunger > 18) {
           h.state = 'forage';
           var farm2 = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.3; });
           if (farm2) h.target = farm2;
@@ -5257,8 +5379,8 @@
           }
         }
 
-        // 5) Farm work after colony
-        if (colony && colony.formed && h.intel > 33 && Math.random() < 0.3) {
+        // 5) Farm work whenever farms exist (before or after village)
+        if (h.intel > 28 && Math.random() < 0.32) {
           var myFarm = nearest(buildings, h, function (b) { return b.type === 'farm'; });
           if (myFarm) {
             h.state = 'farm';
@@ -5289,30 +5411,61 @@
         if (h.cool > 0) h.cool -= dt;
         if (h.tradeCool > 0) h.tradeCool -= dt;
 
-        // Carried babies: stay with mother, no independent actions
+        // Carried babies: stay with mother (or adoptive mother)
         if (h.carriedBy) {
           var mom = h.carriedBy;
           if (!mom || mom.dead) {
-            h.carriedBy = null; h.state = 'wander'; h.think = 0;
+            // Birth mother died mid-childhood → another mother takes them in
+            h.carriedBy = null;
+            if (h.age < MATURE_AGE && !h.dead) {
+              adoptOrphan(h);
+            } else {
+              h.state = 'wander';
+              h.think = 0;
+            }
           } else {
             h.x = mom.x + 5;
             h.y = mom.y - 8;
-            h.hunger = Math.max(0, h.hunger - 0.002 * dt); // fed by mother
+            h.hunger = Math.max(0, h.hunger - 0.002 * dt);
             h.energy = Math.min(100, h.energy + 0.001 * dt);
             if (h.age >= MATURE_AGE) releaseChild(mom, h);
           }
-          if (h.energy <= 0 || h.age > h.maxAge) { h.dead = true; return; }
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) { h.dead = true; return; }
           return;
         }
 
-        // Resting mother in house with baby
+        // Resting mother in house with baby — hunger 2x normal; can starve at 50
         if (h.resting || h.state === 'rest') {
-          h.hunger += 0.0004 * dt; // slower hunger while resting
-          h.energy = Math.min(100, h.energy + 0.001 * dt);
-          if (h.hunger > 85) h.energy -= 0.001 * dt;
-          if (h.energy <= 0 || h.age > h.maxAge) {
-            if (h.carrying) { h.carrying.carriedBy = null; h.carrying = null; }
-            h.dead = true; return;
+          h.hunger += 0.007 * dt; // 2x normal (0.0035) — depends on father bringing food
+          h.energy = Math.min(100, h.energy + 0.0005 * dt);
+          // Eat from own stock if any (delivered by father)
+          if (h.food > 0 && h.hunger > 10) {
+            h.food -= 0.02 * dt;
+            h.hunger = Math.max(0, h.hunger - 0.045 * dt);
+          }
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
+            // Mother died while raising — try to find adoptive mothers for each child
+            var orphans = [];
+            if (h.carryingList && h.carryingList.length) {
+              orphans = h.carryingList.slice();
+            } else if (h.carrying) {
+              orphans = [h.carrying];
+            }
+            h.carrying = null;
+            h.carryingList = null;
+            if (h.spouse && !h.spouse.dead) {
+              h.spouse.state = 'wander';
+              h.spouse.think = 2;
+            }
+            clearSpouse(h);
+            h.dead = true;
+            orphans.forEach(function (c) {
+              if (c && !c.dead && c.age < MATURE_AGE) {
+                c.carriedBy = null;
+                adoptOrphan(c);
+              }
+            });
+            return;
           }
           // Stay at house
           var home = h.home || nearestHouse(h);
@@ -5325,60 +5478,123 @@
               h.y += (dy / d) * 10 * dt;
             }
           }
-          // Keep baby attached
-          if (h.carrying && !h.carrying.dead) {
+          // Keep all babies attached
+          if (h.carryingList && h.carryingList.length) {
+            h.carryingList = h.carryingList.filter(function (c) { return c && !c.dead; });
+            h.carryingList.forEach(function (c, i) {
+              c.x = h.x + 5 + i * 6;
+              c.y = h.y - 8;
+              if (c.age >= MATURE_AGE) releaseChild(h, c);
+            });
+            h.carrying = h.carryingList[0] || null;
+            if (!h.carryingList.length) {
+              h.resting = false; h.carrying = null; h.carryingList = null;
+              h.state = 'wander'; h.think = 2;
+            }
+          } else if (h.carrying && !h.carrying.dead) {
             h.carrying.x = h.x + 5;
             h.carrying.y = h.y - 8;
             if (h.carrying.age >= MATURE_AGE) releaseChild(h, h.carrying);
           } else {
-            // Baby gone — stop resting
-            h.resting = false; h.carrying = null; h.state = 'wander'; h.think = 2;
+            h.resting = false; h.carrying = null; h.carryingList = null;
+            h.state = 'wander'; h.think = 2;
           }
           return;
         }
 
-        // Husband stays at home with wife while she raises the child
-        if (h.state === 'home') {
-          h.hunger += 0.0006 * dt;
-          h.energy = Math.min(100, h.energy + 0.0005 * dt);
+        // Father: when wife is resting, priority = get food and bring it to her
+        if (h.state === 'home' || (h.spouse && !h.spouse.dead && (h.spouse.resting || h.spouse.state === 'rest'))) {
+          h.hunger += 0.0035 * dt;
+          h.energy -= 0.0005 * dt;
           if (h.spouse && h.spouse.dead) {
             clearSpouse(h);
             h.state = 'wander'; h.think = 2; h.target = null;
             return;
           }
-          var homePos = h.home || (h.spouse && h.spouse.home) || nearestHouse(h);
-          if (homePos) {
-            h.home = homePos;
-            var hd2 = dist(h, homePos);
-            if (hd2 > 14) {
-              var dx2 = homePos.x - h.x, dy2 = homePos.y - h.y, d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
-              h.x += (dx2 / d2) * 11 * dt;
-              h.y += (dy2 / d2) * 11 * dt;
-            }
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
+            h.dead = true; clearSpouse(h); return;
           }
-          // When spouse is no longer resting, resume normal life (still married)
+          // Wife no longer resting → normal life
           if (h.spouse && !h.spouse.resting && h.spouse.state !== 'rest') {
             h.state = 'wander';
             h.think = 3;
             h.target = null;
+            return;
           }
-          if (h.energy <= 0 || h.age > h.maxAge) { h.dead = true; clearSpouse(h); return; }
+
+          var wife = h.spouse;
+          h.state = 'home';
+
+          // If carrying food, deliver to mother
+          if (h.food >= 0.8) {
+            var wdx = wife.x - h.x, wdy = wife.y - h.y;
+            var wd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+            if (wd > 16) {
+              var fspd = 16 + h.intel * 0.08;
+              h.x += (wdx / wd) * fspd * dt;
+              h.y += (wdy / wd) * fspd * dt;
+            } else {
+              // Transfer food to mother
+              var give = Math.min(h.food, 2.5 * dt);
+              h.food -= give;
+              wife.food = (wife.food || 0) + give;
+              wife.hunger = Math.max(0, wife.hunger - give * 1.2);
+            }
+            return;
+          }
+
+          // Need food — forage farm / plants / fruit (priority over staying idle at house)
+          var foodSrc = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.4; }) ||
+            nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
+            nearest(trees, h, function (t) { return t.fruit > 0.3; });
+          if (foodSrc) {
+            var sdx = foodSrc.x - h.x, sdy = foodSrc.y - h.y;
+            var sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+            var gspd = 16 + h.intel * 0.08;
+            if (sd > 16) {
+              h.x += (sdx / sd) * gspd * dt;
+              h.y += (sdy / sd) * gspd * dt;
+            } else {
+              if (foodSrc.type === 'farm' && (foodSrc.food || 0) > 0) {
+                foodSrc.food -= 0.04 * dt;
+                h.food += 0.035 * dt;
+              } else if (foodSrc.fruit !== undefined && foodSrc.fruit > 0) {
+                foodSrc.fruit -= 0.035 * dt;
+                h.food += 0.03 * dt;
+              } else if (foodSrc.food !== undefined && foodSrc.type === undefined) {
+                foodSrc.food -= 0.04 * dt;
+                h.food += 0.035 * dt;
+              }
+            }
+          } else {
+            // No food source — go near wife / house and wait briefly
+            var homePos = h.home || wife.home || nearestHouse(h);
+            if (homePos) {
+              h.home = homePos;
+              var hd2 = dist(h, homePos);
+              if (hd2 > 20) {
+                var dx2 = homePos.x - h.x, dy2 = homePos.y - h.y, d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+                h.x += (dx2 / d2) * 12 * dt;
+                h.y += (dy2 / d2) * 12 * dt;
+              }
+            }
+          }
           return;
         }
 
-        h.hunger += 0.0012 * dt;
+        h.hunger += 0.0035 * dt; // rises fast — need farms/food
         h.energy -= 0.0005 * dt;
-        if (h.hunger > 85) h.energy -= 0.002 * dt;
-        if (h.energy <= 0 || h.age > h.maxAge) { clearSpouse(h); h.dead = true; return; }
+        if (h.hunger >= 40) h.energy -= 0.001 * dt;
+        if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
+          clearSpouse(h);
+          h.dead = true;
+          return;
+        }
 
         if (h.state === 'forage' || h.state === 'build' || h.state === 'eat' || h.state === 'chop' || h.state === 'farm' || h.state === 'social') {
           h.intel = Math.min(100, h.intel + 0.0004 * dt);
         } else {
           h.intel = Math.min(100, h.intel + 0.0001 * dt);
-        }
-
-        if (!h.votedColony && h.age > MATURE_AGE * 0.4 && Math.random() < 0.002 * dt) {
-          tryColonyVote(h);
         }
 
         // Anti-stuck
@@ -5419,8 +5635,8 @@
           var dx = dest.x - h.x, dy = dest.y - h.y;
           var d = Math.sqrt(dx * dx + dy * dy) || 1;
           var spd = 16 + h.intel * 0.08;
-          if (h.hunger > 60) spd *= 0.6;
-          else if (h.hunger > 40) spd *= 0.85;
+          if (h.hunger > 40) spd *= 0.55;
+          else if (h.hunger > 30) spd *= 0.75;
           h.x += (dx / d) * spd * dt;
           h.y += (dy / d) * spd * dt;
           h.x = Math.max(16, Math.min(W - 16, h.x));
@@ -5522,11 +5738,10 @@
             return true;
           });
         }
-        if (colony && colony.formed) {
-          buildings.forEach(function (b) {
-            if (b.type === 'farm') b.food = Math.min(12, (b.food || 0) + 0.004 * dt);
-          });
-        }
+        // Farms grow food as soon as they exist (pre-village agriculture)
+        buildings.forEach(function (b) {
+          if (b.type === 'farm') b.food = Math.min(16, (b.food || 0) + 0.008 * dt);
+        });
         // New plants only in clear areas
         if (Math.random() < 0.0005 * dt && plants.length < 50) {
           var px = rand(30, W - 30), py = rand(30, H - 30);
@@ -5542,6 +5757,7 @@
         }
 
         humans.forEach(function (h) { updateHuman(h, dt); });
+        checkColonyFromBuilders();
         humans = humans.filter(function (h) { return !h.dead; });
         if (colony) {
           colony.members = colony.members.filter(function (id) {
@@ -5564,7 +5780,7 @@
         win.el.querySelector('#gen-farms').textContent = farms;
         win.el.querySelector('#gen-colony').textContent = colony && colony.formed
           ? 'Yes (' + colony.members.length + ')'
-          : (colony ? colony.votesYes + '/10 yes' : '—');
+          : (colony && colony.buildersSeen ? colony.buildersSeen + '/2 building' : '0/2 building');
         win.el.querySelector('#gen-day').textContent = Math.floor(day);
       }
 
@@ -5735,9 +5951,10 @@
             ctx.arc(h.x, h.y - 9, 8, 0, Math.PI * 2);
             ctx.stroke();
           }
-          if (h.colonyYes && colony && !colony.formed) {
-            ctx.fillStyle = '#c9a227';
-            ctx.fillRect(h.x - 3, h.y - 20, 6, 3);
+          if (h.state === 'build' && h.buildSite && colony && !colony.formed) {
+            ctx.fillStyle = '#81c784';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('BUILD', h.x - 14, h.y - 22);
           }
           ctx.fillStyle = h.gender === 'm' ? '#4fc3f7' : '#f48fb1';
           ctx.fillRect(h.x - 2, h.y + 6, 4, 3);
