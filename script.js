@@ -4612,6 +4612,7 @@
       var MAX_COUPLES_PER_HOUSE = 2; // 2 couples can share a house
       var HOSPITAL_WORKERS_MAX = 4;
       var REVIVE_CHANCE = 0.30;
+      var REVIVE_TIME = 240; // ~2 in-game days to finish a successful revive
       var pendingRescue = []; // dying humans awaiting hospital pickup
       var BUILD_CLEAR = 38;
       var BUILD_TIME = 360; // ~3 in-game days for normal buildings
@@ -4654,7 +4655,7 @@
           stateTime: 0, tradeCool: 0, kids: 0,
           resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null, adoptiveMotherId: null,
           spouse: null, mateTarget: null, babyReadyAt: 0,
-          tool: null, hospitalWorker: false, dying: false, rescueTarget: null, capitolBuilder: false
+          tool: null, hospitalWorker: false, dying: false, rescueTarget: null, capitolBuilder: false, recovering: false, recoverLeft: 0
         };
         humans.push(h);
         return h;
@@ -5457,6 +5458,7 @@
         clearSpouse(h);
         h.hospitalWorker = false;
         h.dying = false;
+        h.recovering = false;
         h.dead = true;
         pendingRescue = pendingRescue.filter(function (x) { return x !== h; });
       }
@@ -5464,32 +5466,58 @@
       function tryReviveAtHospital(patient) {
         var hosp = getHospital();
         if (!hosp || !patient) { finalizeDeath(patient); return; }
-        // Bring patient to hospital visually
         patient.x = hosp.x + rand(-8, 8);
         patient.y = hosp.y + rand(-8, 8);
+        // Free rescuers back to hospital post
+        humans.forEach(function (w) {
+          if (w.rescueTarget === patient) {
+            w.rescueTarget = null;
+            w.state = 'hospital_duty';
+            w.think = 4;
+          }
+        });
+        pendingRescue = pendingRescue.filter(function (x) { return x !== patient; });
+
         if (Math.random() < REVIVE_CHANCE) {
+          // Success path: recovery takes ~2 days
           patient.dying = false;
           patient.dead = false;
-          patient.energy = 40 + rand(0, 20);
-          patient.hunger = Math.min(25, patient.hunger);
-          patient.state = 'wander';
-          patient.think = 5;
-          patient.intel = Math.min(100, patient.intel + 0.3);
-          showToast('#' + patient.id + ' revived at hospital! (30% chance)');
+          patient.recovering = true;
+          patient.recoverLeft = REVIVE_TIME;
+          patient.energy = 15;
+          patient.hunger = Math.min(20, patient.hunger || 0);
+          patient.state = 'recover';
+          patient.think = 9999;
+          patient.target = hosp;
+          showToast('#' + patient.id + ' in recovery (~2 days, 30% success)');
           sfx('success');
         } else {
           showToast('#' + patient.id + ' could not be saved');
           finalizeDeath(patient);
         }
-        // Free rescue workers
-        humans.forEach(function (w) {
-          if (w.rescueTarget === patient) {
-            w.rescueTarget = null;
-            w.state = 'wander';
-            w.think = 4;
-          }
-        });
-        pendingRescue = pendingRescue.filter(function (x) { return x !== patient; });
+      }
+
+      function updateRecovery(h, dt) {
+        if (!h.recovering) return false;
+        var hosp = getHospital();
+        if (hosp) {
+          h.x = hosp.x + rand(-6, 6);
+          h.y = hosp.y + rand(-6, 6);
+        }
+        h.recoverLeft = (h.recoverLeft || 0) - dt;
+        h.energy = Math.min(60, h.energy + 0.01 * dt);
+        h.hunger = Math.max(0, (h.hunger || 0) - 0.002 * dt);
+        if (h.recoverLeft <= 0) {
+          h.recovering = false;
+          h.recoverLeft = 0;
+          h.energy = 55 + rand(0, 20);
+          h.state = 'wander';
+          h.think = 4;
+          h.target = null;
+          showToast('#' + h.id + ' fully revived after 2 days');
+          sfx('success');
+        }
+        return true;
       }
 
       function startBuilding(h) {
@@ -5585,10 +5613,12 @@
       }
 
       function tryChopWood(h) {
-        var tree = nearest(trees, h, function (t) { return t.wood > 0.5 && t.size > 0.4; });
+        var tree = nearest(trees, h, function (t) { return (t.wood || 0) > 0.5 && (t.size || 0) > 0.35; });
         if (!tree) return false;
         h.state = 'chop';
         h.target = tree;
+        h.think = 25;
+        h.stateTime = 0;
         return true;
       }
 
@@ -5613,6 +5643,20 @@
           }
           if (!h.target) { h.state = 'wander'; h.wanderTo = pickWanderPoint(h); }
           return;
+        }
+
+        // Hospital workers stay at the hospital (except during rescue)
+        if (h.hospitalWorker && h.state !== 'rescue') {
+          var hospDuty = getHospital();
+          if (hospDuty) {
+            h.state = 'hospital_duty';
+            h.target = hospDuty;
+            // Walk back if far
+            if (dist(h, hospDuty) > 50) {
+              h.wanderTo = { x: hospDuty.x, y: hospDuty.y };
+            }
+            return;
+          }
         }
 
         // Capitol builders cannot do other work until capitol is done
@@ -5792,15 +5836,7 @@
         // Again prefer chop before idle activities
         if (woodAmt < WOOD_STOCK && tryChopWood(h)) return;
 
-        // Hospital / tools
-        if (h.hospitalWorker && Math.random() < 0.15) {
-          var hosp = getHospital();
-          if (hosp) {
-            h.state = 'wander';
-            h.wanderTo = { x: hosp.x + rand(-30, 30), y: hosp.y + rand(-30, 30) };
-            return;
-          }
-        }
+        // Sign up for hospital (non-workers)
         if (colony && colony.formed && !h.hospitalWorker && Math.random() < 0.08) {
           if (tryJoinHospital(h)) return;
         }
@@ -5815,6 +5851,60 @@
           if (myFarm) { h.state = 'farm'; h.target = myFarm; return; }
         }
 
+        // Storage: deposit surplus or withdraw when low
+        if (Math.random() < 0.28) {
+          var storeB = nearest(buildings, h, function (b) { return b.type === 'storage'; });
+          if (storeB) {
+            var needStore = (woodAmt > WOOD_STOCK * 0.5) || (woodAmt < WOOD_FOR_HOUSE) ||
+              ((h.food || 0) > 4) || ((h.food || 0) < 1 && h.hunger > 20);
+            if (needStore) {
+              h.state = 'store';
+              h.target = storeB;
+              return;
+            }
+          }
+        }
+
+        // Market: trade wood/food
+        if (Math.random() < 0.22) {
+          var mkt = nearest(buildings, h, function (b) { return b.type === 'market'; });
+          if (mkt) {
+            h.state = 'market';
+            h.target = mkt;
+            return;
+          }
+        }
+
+        // School visit for learning
+        if (Math.random() < 0.15) {
+          var sch = nearest(buildings, h, function (b) { return b.type === 'school'; });
+          if (sch) {
+            h.state = 'school';
+            h.target = sch;
+            return;
+          }
+        }
+
+        // Well when thirsty/tired
+        if ((h.hunger > 25 || h.energy < 50) && Math.random() < 0.3) {
+          var well = nearest(buildings, h, function (b) { return b.type === 'well'; });
+          if (well) {
+            h.state = 'well';
+            h.target = well;
+            return;
+          }
+        }
+
+        // Mine for extra resources
+        if (woodAmt < WOOD_STOCK && Math.random() < 0.2) {
+          var mine = nearest(buildings, h, function (b) { return b.type === 'mine'; });
+          if (mine) {
+            h.state = 'mine';
+            h.target = mine;
+            return;
+          }
+        }
+
         // Social trade
         if (Math.random() < 0.2) {
           var buddy = nearest(humans, h, function (o) {
@@ -5823,7 +5913,6 @@
           if (buddy) { h.state = 'social'; h.target = buddy; return; }
         }
 
-        // Keep chopping if still under stock
         if (woodAmt < WOOD_STOCK && tryChopWood(h)) return;
 
         h.state = 'wander';
@@ -5836,6 +5925,7 @@
         h.stateTime += dt;
         if (h.cool > 0) h.cool -= dt;
         if (h.tradeCool > 0) h.tradeCool -= dt;
+        if (updateRecovery(h, dt)) return;
 
         // Hospital nursery care
         if (h.inNursery) {
@@ -6021,23 +6111,39 @@
           h.intel = Math.min(100, h.intel + 0.0001 * dt);
         }
 
-        // Anti-stuck
-        if (h.stateTime > 40) {
+        // Anti-stuck — never cancel active chop while tree still has wood
+        var choppingOk = h.state === 'chop' && h.target && (h.target.wood || 0) > 0;
+        if (h.stateTime > 40 && !choppingOk) {
           var mating = h.state === 'social' && h.mateTarget && !h.mateTarget.dead;
           if (!mating) {
             h.target = null;
             h.think = 0;
             h.stateTime = 0;
-            if (h.state === 'chop' || h.state === 'forage') h.state = 'wander';
+            if (h.state === 'forage') h.state = 'wander';
           } else if (h.stateTime > 120) {
             h.target = null; h.mateTarget = null; h.think = 0; h.stateTime = 0; h.state = 'wander';
           }
         }
+        // Chopping too long with no progress near tree → pick a new tree
+        if (h.state === 'chop' && h.stateTime > 200) {
+          h.target = null;
+          h.stateTime = 0;
+          h.think = 0;
+        }
 
         clearInvalidTarget(h);
 
+        // Stay on chop until tree is done (don't re-decide every few seconds)
+        if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0) {
+          h.think = Math.max(h.think, 8);
+        }
+
         if (h.state === 'rescue' || h.state === 'dying' || h.dying) {
           // keep rescue duty
+        } else if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0) {
+          // keep chopping
+        } else if (h.state === 'hospital_duty' || h.recovering) {
+          // stay on duty / in recovery
         } else if (h.think <= 0 || (!h.target && h.state !== 'wander' && h.state !== 'eat' && h.state !== 'build' && h.state !== 'rest' && h.state !== 'craft')) {
           decide(h);
         }
@@ -6101,6 +6207,25 @@
           return;
         }
 
+        // Hospital staff stay on site
+        if (h.state === 'hospital_duty' && h.hospitalWorker) {
+          var hdH = getHospital();
+          if (hdH) {
+            var hdx = hdH.x - h.x, hdy = hdH.y - h.y;
+            var hdd = Math.sqrt(hdx * hdx + hdy * hdy) || 1;
+            if (hdd > 24) {
+              h.x += (hdx / hdd) * 12 * dt;
+              h.y += (hdy / hdd) * 12 * dt;
+            } else {
+              // Idle near hospital / tend nursery passively
+              h.x = hdH.x + rand(-18, 18);
+              h.y = hdH.y + rand(-14, 14);
+              h.energy = Math.min(100, h.energy + 0.002 * dt);
+            }
+          }
+          return;
+        }
+
         var dest = null;
         if (h.state === 'wander') dest = h.wanderTo;
         else if (h.state === 'build' && h.buildSite) dest = h.buildSite;
@@ -6123,7 +6248,22 @@
             if (Math.random() < 0.35) h.think = 0;
           }
 
-          if (d < 20) {
+          // Chop as soon as close enough (don't require perfect overlap)
+          if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0 && d < 28) {
+            var chopMul2 = 1;
+            if (h.tool === 'pickaxe') chopMul2 = 2.4;
+            else if (h.tool === 'axe') chopMul2 = 2.0;
+            else if (h.tool === 'spear') chopMul2 = 1.3;
+            h.target.wood -= 0.14 * chopMul2 * dt;
+            h.wood += 0.12 * chopMul2 * dt;
+            h.think = Math.max(h.think, 6);
+            if (h.target.wood <= 0) {
+              trees = trees.filter(function (t) { return t !== h.target; });
+              h.target = null;
+              h.state = 'wander';
+              h.think = 2;
+            }
+          } else if (d < 20) {
             if (h.state === 'forage' && h.target) {
               if (h.target.type === 'farm' && (h.target.food || 0) > 0) {
                 h.target.food -= 0.015 * dt;
@@ -6140,22 +6280,50 @@
               } else {
                 h.target = null; h.think = 0;
               }
+            } else if (h.state === 'store' && h.target && h.target.type === 'storage') {
+              if (useStorage(h)) {
+                h.state = 'wander';
+                h.think = 5;
+              } else {
+                h.state = 'wander';
+                h.think = 3;
+              }
+            } else if (h.state === 'market' && h.target && h.target.type === 'market') {
+              useMarket(h);
+              h.state = 'wander';
+              h.think = 6;
+            } else if (h.state === 'school' && h.target && h.target.type === 'school') {
+              h.intel = Math.min(100, h.intel + 0.02 * dt);
+              h.energy = Math.min(100, h.energy + 0.005 * dt);
+              if (Math.random() < 0.01 * dt) { h.state = 'wander'; h.think = 4; }
+            } else if (h.state === 'well' && h.target && h.target.type === 'well') {
+              h.hunger = Math.max(0, h.hunger - 0.03 * dt);
+              h.energy = Math.min(100, h.energy + 0.02 * dt);
+              if (h.hunger < 15 && h.energy > 70) { h.state = 'wander'; h.think = 3; }
+            } else if (h.state === 'mine' && h.target && h.target.type === 'mine') {
+              var mrate = h.tool === 'pickaxe' ? 0.08 : 0.03;
+              h.wood += mrate * dt;
+              if (Math.random() < 0.008 * dt) { h.state = 'wander'; h.think = 4; }
             } else if (h.state === 'farm' && h.target && h.target.type === 'farm') {
               var farmMul = h.tool === 'pickaxe' ? 1.5 : 1;
-              h.target.food = Math.min(16, (h.target.food || 0) + 0.02 * farmMul * dt);
+              h.target.food = Math.min(20, (h.target.food || 0) + 0.02 * farmMul * dt);
               h.food += 0.004 * farmMul * dt;
               if (Math.random() < 0.002 * dt) { h.target = null; h.think = 0; }
             } else if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0) {
               var chopMul = 1;
-              if (h.tool === 'pickaxe') chopMul = 2.2;
-              else if (h.tool === 'axe') chopMul = 1.8;
-              else if (h.tool === 'spear') chopMul = 1.15;
-              h.target.wood -= 0.018 * chopMul * dt;
-              h.wood += 0.016 * chopMul * dt;
+              if (h.tool === 'pickaxe') chopMul = 2.4;
+              else if (h.tool === 'axe') chopMul = 2.0;
+              else if (h.tool === 'spear') chopMul = 1.3;
+              // Fast enough to see wood gain (~0.12/s base)
+              h.target.wood -= 0.14 * chopMul * dt;
+              h.wood += 0.12 * chopMul * dt;
+              h.think = Math.max(h.think, 6);
               if (h.target.wood <= 0) {
+                // Remove depleted tree
+                trees = trees.filter(function (t) { return t !== h.target; });
                 h.target = null;
                 h.state = 'wander';
-                h.think = 3 + rand(0, 5);
+                h.think = 2 + rand(0, 3);
               }
             } else if (h.state === 'rescue' && h.rescueTarget) {
               var patient = h.rescueTarget;
@@ -6378,6 +6546,9 @@
           ctx.fillStyle = '#ffe0b2';
           ctx.font = '9px Inter,sans-serif';
           ctx.fillText('STORE', b.x - 16, b.y + 22);
+          ctx.fillStyle = '#c5e1a5';
+          ctx.font = '8px Inter,sans-serif';
+          ctx.fillText('W' + Math.floor(b.stockWood || 0) + ' F' + Math.floor(b.stockFood || 0), b.x - 16, b.y + 32);
         } else if (b.type === 'workshop') {
           ctx.fillStyle = '#455a64';
           ctx.fillRect(b.x - 14, b.y - 12, 28, 24);
@@ -6574,8 +6745,22 @@
             ctx.fillText(h.tool === 'pickaxe' ? '⛏' : (h.tool === 'axe' ? '🪓' : '⚔'), h.x + 8, h.y - 6);
           }
           if (h.hospitalWorker) {
+            // White medical uniform
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(h.x - 7, h.y - 2, 14, 12);
+            // Red cross
             ctx.fillStyle = '#e53935';
-            ctx.fillRect(h.x - 8, h.y + 10, 16, 3);
+            ctx.fillRect(h.x - 1.5, h.y, 3, 8);
+            ctx.fillRect(h.x - 4, h.y + 2.5, 8, 3);
+            ctx.fillStyle = '#e53935';
+            ctx.font = '7px Inter,sans-serif';
+            ctx.fillText('MD', h.x - 6, h.y - 14);
+          }
+          if (h.recovering) {
+            ctx.fillStyle = '#81c784';
+            ctx.font = '8px Inter,sans-serif';
+            var daysLeft = Math.max(0, (h.recoverLeft || 0) / 120);
+            ctx.fillText('REC ' + daysLeft.toFixed(1) + 'd', h.x - 16, h.y - 22);
           }
           // Marriage ring mark
           if (h.spouse && !h.spouse.dead) {
