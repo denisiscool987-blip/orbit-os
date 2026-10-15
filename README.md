@@ -1,33 +1,50 @@
-# OrbitOS v1.6.5 — Utility Pack + Genesis
+# OrbitOS — Desktop + Orbit Genesis
 
-Pure HTML/CSS/JS desktop for GitHub Pages or offline (open `index.html`).
+Pure HTML/CSS/JS desktop for **GitHub Pages** or offline (open `index.html`).
 
-## New in 1.6.5
-- **Orbit Genesis** — Living world simulation (slow)
-  - Humans start at IQ ~30, learn over life, smarter each generation
-  - Mature at ~1 hour of age; reproduce before ~2h lifespan ends
-  - 10 wood → house; after colony: farms, storage, workshops, capitol
-  - Colony forms when 10 humans vote yes; farming unlocks after
-  - Hunger >30 seek food; >60 walk slower · larger map
-  - Speed 1×–16×, pause, plant seeds, reset
+## Files (GitHub site root)
+- `index.html`
+- `styles.css`
+- `script.js`
+- `README.md`
 
-## New in 1.6.2
-- **Achievements** (10) — Settings or Ctrl+K
-- **Backup / restore** — Settings → Export/Import JSON
-- **F1** keyboard shortcuts help
-- **Password Generator** (crypto RNG when available)
-- **Unit Converter** (temp, length, mass, data)
-- **Pomodoro** timer (25/5)
-- **Dice & Coin**
+## Orbit Genesis (Start menu → 🌍)
+Life simulation with slow generational play.
 
-## Controls
-- P1 **WASD** · P2 **Arrows** on 2P games
-- **`** panic closes tab
-- **F1** shortcuts · **Ctrl+K** palette
+### Life & family
+- Lifespan **4 hours** (1× speed)
+- Mature (leave home) at **5 min** · reproduce at **20 min**
+- Up to **6 children** per couple · twins/triplets possible
+- **2 couples** can share one house
+- Monogamy until death · parent–child pairs blocked · siblings may pair
+- Mother rests with baby; father brings food · adoption if mother dies
+
+### Buildings
+| Building | Wood | When |
+|----------|------|------|
+| House, Farm | 5 | Always |
+| Storage, Workshop, Hospital, School, Market, Mine | 10 | After colony |
+| Well | 8 | After colony |
+| Capitol | auto | When colony forms |
+
+Colony forms when **2 people** build at the same time (each with enough wood).
+
+### Tools (workshop, 3 wood)
+- **Pickaxe** — chop ~2.2×, mine bonus
+- **Axe** — chop ~1.8×
+- **Spear** — slight chop boost
+
+### Hospital (after colony)
+- Up to **4 workers** sign up
+- On death, **2 workers** fetch the person
+- **30% revive** at hospital · otherwise they die
+
+### Other
+- Starve at hunger **50** · wells help · schools raise IQ
+- Speed 1×–16× · pause · spawn · plant · reset
 
 ## Deploy
-Site: upload `index.html`, `styles.css`, `script.js` to repo root.  
-Portable: unzip and open `index.html` in any browser.
+Upload the four files to your repo root for GitHub Pages, or unzip and open `index.html`.
 
 ## License
 MIT

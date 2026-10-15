@@ -2059,7 +2059,7 @@
     genesis: {
       title: 'Orbit Genesis', icon: '🌍', width: 940, height: 680,
       content: function () {
-        return '<div class="genesis-wrap">' +'<div class="genesis-hud">' +'<span>Pop: <strong id="gen-pop">0</strong></span>' +'<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +'<span>Gen: <strong id="gen-gen">0</strong></span>' +'<span>Wood: <strong id="gen-wood">0</strong></span>' +'<span>Farms: <strong id="gen-farms">0</strong></span>' +'<span>Colony: <strong id="gen-colony">—</strong></span>' +'<span>Day: <strong id="gen-day">0</strong></span>' +'</div>' +'<canvas id="gen-canvas" width="900" height="520"></canvas>' +'<div class="game-btn-row gen-controls">' +'<button type="button" id="gen-spawn">👤 Spawn Human</button>' +'<button type="button" id="gen-plant">🌱 Plant Seed</button>' +'<button type="button" id="gen-pause">Pause</button>' +'<button type="button" id="gen-speed">Speed 1x</button>' +'<button type="button" id="gen-clear">Reset World</button>' +'</div>' +'<p class="gen-help">2 builders with 10 wood each = colony · unlocks storage/workshop · father feeds resting mother</p>' +'</div>';
+        return '<div class="genesis-wrap">' +'<div class="genesis-hud">' +'<span>Pop: <strong id="gen-pop">0</strong></span>' +'<span>Avg IQ: <strong id="gen-iq">0</strong></span>' +'<span>Gen: <strong id="gen-gen">0</strong></span>' +'<span>Wood: <strong id="gen-wood">0</strong></span>' +'<span>Farms: <strong id="gen-farms">0</strong></span>' +'<span>Colony: <strong id="gen-colony">—</strong></span>' +'<span>Day: <strong id="gen-day">0</strong></span>' +'</div>' +'<canvas id="gen-canvas" width="900" height="520"></canvas>' +'<div class="game-btn-row gen-controls">' +'<button type="button" id="gen-spawn">👤 Spawn Human</button>' +'<button type="button" id="gen-plant">🌱 Plant Seed</button>' +'<button type="button" id="gen-pause">Pause</button>' +'<button type="button" id="gen-speed">Speed 1x</button>' +'<button type="button" id="gen-clear">Reset World</button>' +'</div>' +'<p class="gen-help">Build ~3 days · settle then more babies · rare marry early · hospital daycare</p>' +'</div>';
       },
       init: function (win) {
         initGenesis(win);
@@ -4598,15 +4598,24 @@
       var nextId = 1, maxGen = 0, selected = null;
       var colony = null;
       var lastTs = performance.now();
-      var LIFE_SEC = 7200;
-      var MATURE_AGE = 300; // 5 min at 1x — child leaves house / stops being carried
-      var REPRO_AGE = 1200; // 20 min at 1x — can form couple & have kids
-      var REPRO_COOL = 1200; // 20 min between births at 1x
-      var MAX_KIDS = 6; // per couple
-      var WOOD_FOR_HOUSE = 5; // house & farm cost 5; other buildings 10
-      var HUNGER_DEATH = 50; // starve at 50 — farms required to survive
+      var LIFE_SEC = 14400; // 4 hours at 1x
+      var MATURE_AGE = 600; // 10 min — child matures / leaves care
+      var REPRO_AGE = 1200; // 20 min — can reproduce
+      var REPRO_COOL = 1200; // 20 min child/birth cooldown
+      var MAX_KIDS = 6;
+      var WOOD_FOR_HOUSE = 5; // house & farm
+      var WOOD_STOCK = 80;
+      var SETTLE_HOUSES = 3;
+      var SETTLE_FARMS = 2;
+      var SETTLE_TOTAL = 8;
+      var HUNGER_DEATH = 50;
+      var MAX_COUPLES_PER_HOUSE = 2; // 2 couples can share a house
+      var HOSPITAL_WORKERS_MAX = 4;
+      var REVIVE_CHANCE = 0.30;
+      var pendingRescue = []; // dying humans awaiting hospital pickup
       var BUILD_CLEAR = 38;
-      var BUILD_TIME = 55; // sim-seconds to finish construction
+      var BUILD_TIME = 360; // ~3 in-game days for normal buildings
+      var CAPITOL_BUILD_TIME = 720; // ~6 in-game days for capitol
 
       function rand(a, b) { return a + Math.random() * (b - a); }
       function dist(a, b) {
@@ -4644,7 +4653,8 @@
           home: null, buildSite: null, buildProgress: 0, buildType: null,
           stateTime: 0, tradeCool: 0, kids: 0,
           resting: false, carrying: null, carriedBy: null, motherId: null, fatherId: null, adoptiveMotherId: null,
-          spouse: null, mateTarget: null, babyReadyAt: 0
+          spouse: null, mateTarget: null, babyReadyAt: 0,
+          tool: null, hospitalWorker: false, dying: false, rescueTarget: null, capitolBuilder: false
         };
         humans.push(h);
         return h;
@@ -4652,7 +4662,7 @@
 
       function seedWorld() {
         humans = []; plants = []; trees = []; buildings = [];
-        day = 0; maxGen = 0; nextId = 1; selected = null; colony = null;
+        day = 0; maxGen = 0; nextId = 1; selected = null; colony = null; pendingRescue = [];
         for (var i = 0; i < 18; i++) {
           trees.push({
             x: rand(40, W - 40), y: rand(40, H - 40),
@@ -4701,21 +4711,43 @@
         return b && (b.type === 'house' || b.type === 'capitol');
       }
 
-      function houseOwnersAlive(house) {
-        if (!house || !house.ownerIds || !house.ownerIds.length) return false;
-        return house.ownerIds.some(function (id) {
-          return humans.some(function (h) { return h.id === id && !h.dead; });
+      function livingOwnerIds(house) {
+        if (!house || !house.ownerIds) return [];
+        return house.ownerIds.filter(function (id) {
+          return humans.some(function (h) { return h.id === id && !h.dead && !h.dying; });
         });
+      }
+
+      function houseCoupleCount(house) {
+        var ids = livingOwnerIds(house);
+        var seen = {};
+        var couples = 0;
+        ids.forEach(function (id) {
+          if (seen[id]) return;
+          var h = null; for (var hi = 0; hi < humans.length; hi++) { if (humans[hi].id === id) { h = humans[hi]; break; } }
+          if (!h) return;
+          seen[id] = true;
+          if (h.spouse && !h.spouse.dead && ids.indexOf(h.spouse.id) >= 0) {
+            seen[h.spouse.id] = true;
+          }
+          couples++;
+        });
+        return couples;
+      }
+
+      function houseOwnersAlive(house) {
+        return livingOwnerIds(house).length > 0;
       }
 
       function nearestHouse(from, onlyOwnOrFree) {
         return nearest(buildings, from, function (b) {
           if (!isFamilyHouse(b)) return false;
           if (!onlyOwnOrFree) return true;
-          // Free house OR already owned by this human / their spouse
           if (!b.ownerIds || !b.ownerIds.length || !houseOwnersAlive(b)) return true;
           if (from && b.ownerIds.indexOf(from.id) >= 0) return true;
           if (from && from.spouse && b.ownerIds.indexOf(from.spouse.id) >= 0) return true;
+          // Room for another couple?
+          if (houseCoupleCount(b) < MAX_COUPLES_PER_HOUSE) return true;
           return false;
         });
       }
@@ -4724,18 +4756,25 @@
         return nearest(buildings, from, function (b) {
           if (!isFamilyHouse(b)) return false;
           if (!b.ownerIds || !b.ownerIds.length) return true;
-          return !houseOwnersAlive(b);
+          if (!houseOwnersAlive(b)) return true;
+          return houseCoupleCount(b) < MAX_COUPLES_PER_HOUSE;
         });
       }
 
       function claimHouse(a, b, house) {
         if (!house || !a || !b) return false;
-        // Already claimed by another living couple?
-        if (house.ownerIds && house.ownerIds.length && houseOwnersAlive(house)) {
-          var ok = house.ownerIds.indexOf(a.id) >= 0 || house.ownerIds.indexOf(b.id) >= 0;
-          if (!ok) return false;
+        if (!house.ownerIds) house.ownerIds = [];
+        var already = house.ownerIds.indexOf(a.id) >= 0 || house.ownerIds.indexOf(b.id) >= 0;
+        if (!already) {
+          if (houseCoupleCount(house) >= MAX_COUPLES_PER_HOUSE) return false;
+          // Add both ids without wiping the other couple
+          if (house.ownerIds.indexOf(a.id) < 0) house.ownerIds.push(a.id);
+          if (house.ownerIds.indexOf(b.id) < 0) house.ownerIds.push(b.id);
         }
-        house.ownerIds = [a.id, b.id];
+        // Prune dead ids
+        house.ownerIds = livingOwnerIds(house);
+        if (house.ownerIds.indexOf(a.id) < 0) house.ownerIds.push(a.id);
+        if (house.ownerIds.indexOf(b.id) < 0) house.ownerIds.push(b.id);
         a.home = house;
         b.home = house;
         return true;
@@ -4928,21 +4967,31 @@
         father.home = house;
         claimHouse(mother, father, house);
 
-        mother.resting = true;
         mother.carrying = babies[0];
         mother.carryingList = babies;
-        mother.state = 'rest';
-        mother.target = house;
-        mother.think = 9999;
         mother.buildSite = null;
-
-        father.state = 'home';
-        father.target = house;
-        father.think = 9999;
         father.buildSite = null;
 
         var label = nBabies === 3 ? 'Triplets' : (nBabies === 2 ? 'Twins' : 'Birth');
-        showToast(label + ' at home · Gen ' + childGen + ' · mother resting');
+        // Hospital daycare: workers raise kids so both parents can work
+        if (canUseDaycare()) {
+          mother.resting = false;
+          mother.state = 'wander';
+          mother.think = 2;
+          father.state = 'wander';
+          father.think = 2;
+          dropBabiesAtHospital(mother);
+          showToast(label + ' · Gen ' + childGen + ' · hospital daycare');
+        } else {
+          mother.resting = true;
+          mother.state = 'rest';
+          mother.target = house;
+          mother.think = 9999;
+          father.state = 'home';
+          father.target = house;
+          father.think = 9999;
+          showToast(label + ' at home · Gen ' + childGen + ' · mother resting');
+        }
         sfx('success');
         return true;
       }
@@ -5054,9 +5103,81 @@
         });
         trees = trees.filter(function (t) { return dist(t, { x: cx, y: cy }) > BUILD_CLEAR; });
         colony.capital = { x: cx, y: cy };
-        buildings.push({ type: 'capitol', x: cx, y: cy, level: 1, ownerIds: [] });
-        showToast('Colony founded! 2 builders (10 wood each) · Storage & workshops unlocked');
+        var cap = {
+          type: 'capitol',
+          x: cx,
+          y: cy,
+          level: 1,
+          ownerIds: [],
+          constructing: true,
+          progress: 0,
+          buildTime: CAPITOL_BUILD_TIME,
+          builderIds: [pair[0].id, pair[1].id]
+        };
+        buildings.push(cap);
+        // Lock the two founders onto the capitol until it is finished
+        pair.forEach(function (builder) {
+          builder.capitolBuilder = true;
+          builder.buildSite = null;
+          builder.buildProgress = 0;
+          builder.buildType = null;
+          builder.state = 'capitol_build';
+          builder.target = cap;
+          builder.think = 9999;
+        });
+        showToast('Colony founded! 2 builders locked on capitol (~6 days)');
         sfx('success');
+      }
+
+      function getConstructingCapitol() {
+        for (var i = 0; i < buildings.length; i++) {
+          if (buildings[i].type === 'capitol' && buildings[i].constructing) return buildings[i];
+        }
+        return null;
+      }
+
+      function updateCapitolConstruction(dt) {
+        var b = getConstructingCapitol();
+        if (!b) return;
+        // Only advance while assigned builders are nearby and working
+        var workersOnSite = 0;
+        humans.forEach(function (h) {
+          if (h.dead || !h.capitolBuilder) return;
+          if (b.builderIds && b.builderIds.indexOf(h.id) < 0) return;
+          h.state = 'capitol_build';
+          h.target = b;
+          var d = dist(h, b);
+          if (d > 22) {
+            var dx = b.x - h.x, dy = b.y - h.y, dd = Math.sqrt(dx * dx + dy * dy) || 1;
+            h.x += (dx / dd) * 12 * dt;
+            h.y += (dy / dd) * 12 * dt;
+          } else {
+            workersOnSite++;
+          }
+        });
+        // Need both founders contributing (or at least 1 if one died)
+        var need = 2;
+        var aliveAssigned = humans.filter(function (h) {
+          return !h.dead && h.capitolBuilder && b.builderIds && b.builderIds.indexOf(h.id) >= 0;
+        }).length;
+        if (aliveAssigned < 2) need = Math.max(1, aliveAssigned);
+        if (workersOnSite >= need && need > 0) {
+          b.progress = (b.progress || 0) + dt;
+        }
+        if (b.progress >= (b.buildTime || CAPITOL_BUILD_TIME)) {
+          b.constructing = false;
+          b.progress = b.buildTime || CAPITOL_BUILD_TIME;
+          humans.forEach(function (h) {
+            if (h.capitolBuilder) {
+              h.capitolBuilder = false;
+              h.state = 'wander';
+              h.target = null;
+              h.think = 4;
+            }
+          });
+          showToast('Capitol complete! Builders free again');
+          sfx('success');
+        }
       }
 
       function siteBlocked(x, y, ignoreHuman) {
@@ -5078,7 +5199,8 @@
       function pickBuildSite(h, buildType) {
         var anchors = buildings.filter(function (b) {
           return b.type === 'house' || b.type === 'capitol' || b.type === 'storage' ||
-            b.type === 'workshop' || b.type === 'farm';
+            b.type === 'workshop' || b.type === 'farm' || b.type === 'hospital' ||
+            b.type === 'school' || b.type === 'market' || b.type === 'well' || b.type === 'mine';
         });
         var candidates = [];
         for (var tries = 0; tries < 50; tries++) {
@@ -5111,7 +5233,6 @@
         var farms = buildings.filter(function (b) { return b.type === 'farm'; }).length;
         var roll = Math.random();
 
-        // Before colony: ONLY house or farm (no storage/workshop yet)
         if (!colony || !colony.formed) {
           if (houses === 0) return 'house';
           if (farms < houses && roll < 0.55) return 'farm';
@@ -5119,25 +5240,260 @@
           return roll < 0.5 ? 'house' : 'farm';
         }
 
-        // Colony unlocked: storage & workshop available
-        var hasStorage = buildings.some(function (b) { return b.type === 'storage'; });
-        var hasWorkshop = buildings.some(function (b) { return b.type === 'workshop'; });
-        if (!hasStorage && roll < 0.45) return 'storage';
-        if (!hasWorkshop && roll < 0.4) return 'workshop';
-        if (farms === 0) return 'farm';
-        if (roll < 0.2) return 'farm';
-        if (roll < 0.4) return 'storage';
-        if (roll < 0.55) return 'workshop';
-        return 'house';
+        // After colony: ~33% house, ~33% farm, ~33% special
+        var has = function (t) { return buildings.some(function (b) { return b.type === t; }); };
+        var specials = ['workshop', 'storage', 'hospital', 'school', 'market', 'well', 'mine'];
+        var missing = specials.filter(function (t) { return !has(t); });
+        var pool = missing.length ? missing : specials;
+
+        if (roll < 1 / 3) return 'house';
+        if (roll < 2 / 3) return 'farm';
+        return pool[Math.floor(Math.random() * pool.length)];
       }
 
       function buildCost(type) {
-        if (type === 'workshop' || type === 'storage' || type === 'capitol') return 10;
-        // house & farm
-        return WOOD_FOR_HOUSE; // 5
+        if (type === 'house' || type === 'farm') return WOOD_FOR_HOUSE; // 5
+        if (type === 'well') return 8;
+        // hospital, workshop, storage, school, market, mine, capitol
+        return 10;
+      }
+
+      function getHospital() {
+        for (var bi = 0; bi < buildings.length; bi++) { if (buildings[bi].type === 'hospital') return buildings[bi]; } return null;
+      }
+
+      function hospitalWorkerList() {
+        return humans.filter(function (h) { return !h.dead && !h.dying && h.hospitalWorker; });
+      }
+
+      function tryJoinHospital(h) {
+        if (!colony || !colony.formed) return false;
+        if (!getHospital()) return false;
+        if (h.hospitalWorker) return true;
+        if (h.resting || h.carrying || h.carriedBy) return false;
+        if (hospitalWorkerList().length >= HOSPITAL_WORKERS_MAX) return false;
+        if (h.age < REPRO_AGE) return false;
+        h.hospitalWorker = true;
+        showToast('#' + h.id + ' signed up as hospital worker (' + hospitalWorkerList().length + '/' + HOSPITAL_WORKERS_MAX + ')');
+        return true;
+      }
+
+      function canUseDaycare() {
+        return !!(getHospital() && hospitalWorkerList().length > 0);
+      }
+
+      function dropBabiesAtHospital(mother) {
+        if (!mother || !canUseDaycare()) return false;
+        var babies = [];
+        if (mother.carryingList && mother.carryingList.length) babies = mother.carryingList.slice();
+        else if (mother.carrying) babies = [mother.carrying];
+        if (!babies.length) return false;
+        var hosp = getHospital();
+        if (!hosp.nursery) hosp.nursery = [];
+        babies.forEach(function (c) {
+          if (!c || c.dead) return;
+          c.carriedBy = null;
+          c.inNursery = true;
+          c.nurseryHospital = hosp;
+          c.state = 'nursery';
+          c.x = hosp.x + rand(-10, 10);
+          c.y = hosp.y + rand(-8, 8);
+          if (hosp.nursery.indexOf(c) < 0) hosp.nursery.push(c);
+        });
+        mother.carrying = null;
+        mother.carryingList = null;
+        mother.resting = false;
+        mother.state = 'wander';
+        mother.target = null;
+        mother.think = 3;
+        if (mother.spouse && !mother.spouse.dead && mother.spouse.state === 'home') {
+          mother.spouse.state = 'wander';
+          mother.spouse.target = null;
+          mother.spouse.think = 3;
+        }
+        showToast('Babies at hospital daycare · parents can work');
+        return true;
+      }
+
+      function updateNursery(dt) {
+        buildings.forEach(function (b) {
+          if (b.type !== 'hospital' || !b.nursery) return;
+          b.nursery = b.nursery.filter(function (c) { return c && !c.dead; });
+          var workers = hospitalWorkerList();
+          b.nursery.forEach(function (c) {
+            c.x = b.x + rand(-8, 8);
+            c.y = b.y + rand(-6, 6);
+            // Workers feed/care — hunger down if any worker exists
+            if (workers.length) {
+              c.hunger = Math.max(0, (c.hunger || 0) - 0.003 * dt);
+              c.energy = Math.min(100, (c.energy || 50) + 0.002 * dt);
+            } else {
+              c.hunger = (c.hunger || 0) + 0.002 * dt;
+            }
+            if (c.age >= MATURE_AGE) {
+              c.inNursery = false;
+              c.nurseryHospital = null;
+              c.state = 'wander';
+              c.think = 2;
+              c.wanderTo = pickWanderPoint(c);
+              showToast('Nursery graduate #' + c.id);
+            }
+          });
+          b.nursery = b.nursery.filter(function (c) { return c.inNursery && c.age < MATURE_AGE; });
+        });
+      }
+
+      function craftTool(h) {
+        // Craft at workshop: pickaxe needs 3 wood
+        var shop = nearest(buildings, h, function (b) { return b.type === 'workshop'; });
+        if (!shop || dist(h, shop) > 40) return false;
+        if (h.tool) return false;
+        if (h.wood < 3) return false;
+        h.wood -= 3;
+        var roll = Math.random();
+        if (roll < 0.5) h.tool = 'pickaxe';
+        else if (roll < 0.8) h.tool = 'axe';
+        else h.tool = 'spear';
+        showToast('#' + h.id + ' crafted a ' + h.tool);
+        h.intel = Math.min(100, h.intel + 0.5);
+        return true;
+      }
+
+      function markDying(h, reason) {
+        if (!h || h.dead || h.dying) return;
+        // Hospital rescue attempt if available
+        var hosp = getHospital();
+        var workers = hospitalWorkerList().filter(function (w) {
+          return w !== h && w.state !== 'rescue' && !w.resting;
+        });
+        if (hosp && workers.length >= 2) {
+          h.dying = true;
+          h.energy = Math.max(0.5, h.energy);
+          h.state = 'dying';
+          h.target = null;
+          pendingRescue.push(h);
+          // Assign 2 workers
+          var w1 = workers[0], w2 = workers[1];
+          w1.state = 'rescue'; w1.rescueTarget = h; w1.think = 999;
+          w2.state = 'rescue'; w2.rescueTarget = h; w2.think = 999;
+          showToast('Hospital team dispatched for #' + h.id);
+          return;
+        }
+        // No rescue — final death
+        finalizeDeath(h);
+      }
+
+      function inheritMaterials(dead) {
+        if (!dead) return;
+        var wood = dead.wood || 0;
+        var food = dead.food || 0;
+        var tool = dead.tool || null;
+        if (wood <= 0 && food <= 0 && !tool) return;
+
+        // 1) Living children (by blood)
+        var kids = humans.filter(function (o) {
+          return !o.dead && !o.dying && o !== dead &&
+            (o.motherId === dead.id || o.fatherId === dead.id);
+        });
+        // Prefer mature children for tools; any child for resources
+        var heirs = kids.length ? kids : [];
+
+        // 2) Spouse
+        if (!heirs.length && dead.spouse && !dead.spouse.dead && !dead.spouse.dying) {
+          heirs = [dead.spouse];
+        }
+
+        // 3) Nearest stranger
+        if (!heirs.length) {
+          var stranger = nearest(humans, dead, function (o) {
+            return o !== dead && !o.dead && !o.dying && !o.carriedBy;
+          });
+          if (stranger) heirs = [stranger];
+        }
+
+        if (!heirs.length) {
+          dead.wood = 0; dead.food = 0; dead.tool = null;
+          return;
+        }
+
+        // Split wood/food among heirs; tool goes to one heir (prefer adult without tool)
+        var n = heirs.length;
+        var wEach = wood / n;
+        var fEach = food / n;
+        heirs.forEach(function (e) {
+          e.wood = (e.wood || 0) + wEach;
+          e.food = (e.food || 0) + fEach;
+        });
+        if (tool) {
+          var toolHeir = null;
+          for (var i = 0; i < heirs.length; i++) {
+            if (!heirs[i].tool && heirs[i].age >= MATURE_AGE) { toolHeir = heirs[i]; break; }
+          }
+          if (!toolHeir) {
+            for (var j = 0; j < heirs.length; j++) {
+              if (!heirs[j].tool) { toolHeir = heirs[j]; break; }
+            }
+          }
+          if (!toolHeir) toolHeir = heirs[0];
+          if (!toolHeir.tool) toolHeir.tool = tool;
+        }
+        dead.wood = 0; dead.food = 0; dead.tool = null;
+        var who = heirs.map(function (e) { return '#' + e.id; }).join(', ');
+        showToast('#' + dead.id + ' left materials → ' + who);
+      }
+
+      function finalizeDeath(h) {
+        if (!h) return;
+        inheritMaterials(h);
+        if (h.carryingList) {
+          h.carryingList.forEach(function (c) {
+            if (c && !c.dead && c.age < MATURE_AGE) { c.carriedBy = null; adoptOrphan(c); }
+          });
+        } else if (h.carrying && !h.carrying.dead && h.carrying.age < MATURE_AGE) {
+          h.carrying.carriedBy = null;
+          adoptOrphan(h.carrying);
+        }
+        h.carrying = null; h.carryingList = null;
+        clearSpouse(h);
+        h.hospitalWorker = false;
+        h.dying = false;
+        h.dead = true;
+        pendingRescue = pendingRescue.filter(function (x) { return x !== h; });
+      }
+
+      function tryReviveAtHospital(patient) {
+        var hosp = getHospital();
+        if (!hosp || !patient) { finalizeDeath(patient); return; }
+        // Bring patient to hospital visually
+        patient.x = hosp.x + rand(-8, 8);
+        patient.y = hosp.y + rand(-8, 8);
+        if (Math.random() < REVIVE_CHANCE) {
+          patient.dying = false;
+          patient.dead = false;
+          patient.energy = 40 + rand(0, 20);
+          patient.hunger = Math.min(25, patient.hunger);
+          patient.state = 'wander';
+          patient.think = 5;
+          patient.intel = Math.min(100, patient.intel + 0.3);
+          showToast('#' + patient.id + ' revived at hospital! (30% chance)');
+          sfx('success');
+        } else {
+          showToast('#' + patient.id + ' could not be saved');
+          finalizeDeath(patient);
+        }
+        // Free rescue workers
+        humans.forEach(function (w) {
+          if (w.rescueTarget === patient) {
+            w.rescueTarget = null;
+            w.state = 'wander';
+            w.think = 4;
+          }
+        });
+        pendingRescue = pendingRescue.filter(function (x) { return x !== patient; });
       }
 
       function startBuilding(h) {
+        if (h.capitolBuilder) return false; // locked on capitol
         if (h.buildSite) return true;
         if (h.wood < WOOD_FOR_HOUSE) return false;
         var type = chooseBuildType(h);
@@ -5186,7 +5542,8 @@
           y: h.buildSite.y,
           level: 1 + Math.floor(h.intel / 50),
           food: type === 'farm' ? 2 : 0,
-          ownerIds: [] // free until a couple claims it
+          ownerIds: [],
+          nursery: type === 'hospital' ? [] : undefined
         };
         buildings.push(b);
         h.intel = Math.min(100, h.intel + 1.2);
@@ -5200,7 +5557,7 @@
         }
         h.buildSite = null; h.buildProgress = 0; h.buildType = null;
         h.state = 'wander'; h.target = null; h.think = 6;
-        showToast(type.charAt(0).toUpperCase() + type.slice(1) + ' complete (IQ ' + Math.round(h.intel) + ')');
+        showToast(type.charAt(0).toUpperCase() + type.slice(1) + ' complete · ~3 days · IQ ' + Math.round(h.intel));
       }
 
       function pickWanderPoint(h) {
@@ -5217,12 +5574,32 @@
         return { x: rand(40, W - 40), y: rand(40, H - 40) };
       }
 
+      function isSettled() {
+        var houses = 0, farms = 0, total = buildings.length;
+        for (var i = 0; i < buildings.length; i++) {
+          if (buildings[i].type === 'house') houses++;
+          if (buildings[i].type === 'farm') farms++;
+        }
+        // Settled = enough homes + farms + a bunch of buildings overall
+        return houses >= SETTLE_HOUSES && farms >= SETTLE_FARMS && total >= SETTLE_TOTAL;
+      }
+
+      function tryChopWood(h) {
+        var tree = nearest(trees, h, function (t) { return t.wood > 0.5 && t.size > 0.4; });
+        if (!tree) return false;
+        h.state = 'chop';
+        h.target = tree;
+        return true;
+      }
+
       function decide(h) {
         clearInvalidTarget(h);
-        h.think = 4 + rand(0, 8);
+        h.think = 3 + rand(0, 6);
         h.stateTime = 0;
+        var settled = isSettled();
+        var woodAmt = h.wood || 0;
 
-        // 1) Hunger (only hard-interrupt when really hungry)
+        // 1) Hunger
         if (h.hunger > 18 && h.food > 0.4) {
           h.state = 'eat'; h.target = null; return;
         }
@@ -5238,169 +5615,217 @@
           return;
         }
 
-        // 2) Finish an in-progress build
+        // Capitol builders cannot do other work until capitol is done
+        if (h.capitolBuilder) {
+          var capB = getConstructingCapitol();
+          if (capB) {
+            h.state = 'capitol_build';
+            h.target = capB;
+            return;
+          }
+          h.capitolBuilder = false;
+        }
+
+        // 2) Finish build in progress
         if (h.buildSite) {
           h.state = 'build';
           h.target = h.buildSite;
           return;
         }
 
-        // Resting / home / carried handled in updateHuman
         if (h.resting || h.state === 'rest') {
           h.state = 'rest';
           if (h.home) h.target = h.home;
           return;
         }
-        if (h.state === 'home') {
-          if (h.home) h.target = h.home;
-          return;
-        }
-        if (h.carriedBy) {
-          h.state = 'carried';
-          return;
-        }
+        if (h.carriedBy || h.inNursery) return;
 
-        // Clean up dead spouse — free to remarry
         if (h.spouse && h.spouse.dead) clearSpouse(h);
 
-        // 3) Married: loyal to spouse only
+        // Wife critically hungry while resting → food run only
+        if (h.spouse && !h.spouse.dead && (h.spouse.resting || h.spouse.state === 'rest') && (h.spouse.hunger || 0) >= 30) {
+          h.state = 'home';
+          h.home = h.spouse.home || h.home;
+          h.target = null;
+          return;
+        }
+
+        // ===== SETTLE PHASE: chop + build first; marry & reproduce rarely =====
+        if (!settled) {
+          // Need wood first (most of the time)
+          if (woodAmt < WOOD_STOCK && Math.random() < 0.7) {
+            if (tryChopWood(h)) return;
+          }
+          // Build as soon as affordable
+          if (woodAmt >= WOOD_FOR_HOUSE && Math.random() < 0.7) {
+            if (startBuilding(h)) return;
+          }
+          if (woodAmt < WOOD_STOCK && Math.random() < 0.5) {
+            if (tryChopWood(h)) return;
+          }
+
+          // Rare marriage while settling (need a free house + adult partner)
+          if (!h.spouse && h.age >= REPRO_AGE && h.energy >= 35 && Math.random() < 0.12) {
+            var freeMarry = nearestFreeHouse(h);
+            if (freeMarry) {
+              var earlyPartner = nearest(humans, h, function (o) {
+                return o !== h && !o.dead && o.gender !== h.gender &&
+                  o.age >= REPRO_AGE && o.energy >= 35 &&
+                  !o.resting && !o.carrying && !o.carriedBy &&
+                  (!o.spouse || o.spouse.dead) && !areKin(h, o);
+              });
+              if (earlyPartner) {
+                formCouple(h, earlyPartner);
+                claimHouse(h, earlyPartner, freeMarry);
+                h.state = 'social'; h.target = freeMarry;
+                earlyPartner.state = 'social'; earlyPartner.target = freeMarry;
+                earlyPartner.mateTarget = h; earlyPartner.think = 10;
+                return;
+              }
+            }
+          }
+
+          // Claim house if married and homeless
+          if (h.spouse && !h.spouse.dead) {
+            var needsHome = !h.home || !isFamilyHouse(h.home);
+            if (needsHome) {
+              var freeH = nearestFreeHouse(h);
+              if (freeH) {
+                claimHouse(h, h.spouse, freeH);
+                h.state = 'social';
+                h.target = freeH;
+                return;
+              }
+            }
+            // Rare baby before full settlement (lower chance than settled phase)
+            var spE = h.spouse;
+            if (h.cool <= 0 && spE.cool <= 0 && h.energy >= 35 && spE.energy >= 35 &&
+                (h.kids || 0) < MAX_KIDS && !spE.carrying && !spE.resting) {
+              var earlyBabyChance = (h.kids || 0) < 1 ? 0.12 : 0.04;
+              if (Math.random() < earlyBabyChance) {
+                var fh = h.home || spE.home;
+                if (fh && isFamilyHouse(fh)) {
+                  h.state = 'social'; h.target = fh; h.mateTarget = spE;
+                  if (spE.state !== 'rest' && spE.state !== 'home') {
+                    spE.state = 'social'; spE.target = fh; spE.mateTarget = h; spE.think = 10;
+                  }
+                  return;
+                }
+              }
+            }
+          }
+
+          // Default settle work: chop or wander
+          if (tryChopWood(h)) return;
+          h.state = 'wander';
+          h.target = null;
+          h.wanderTo = pickWanderPoint(h);
+          return;
+        }
+
+        // ===== SETTLED PHASE: keep wood flowing, then expand & reproduce =====
+        // High priority: restock wood (settled people were starving for timber)
+        if (woodAmt < WOOD_STOCK) {
+          if (Math.random() < 0.72) {
+            if (tryChopWood(h)) return;
+          }
+        } else if (woodAmt < WOOD_STOCK * 1.5 && Math.random() < 0.35) {
+          if (tryChopWood(h)) return;
+        }
+
+        // Build when we have materials
+        if (woodAmt >= WOOD_FOR_HOUSE && Math.random() < 0.45) {
+          if (startBuilding(h)) return;
+        }
+
         if (h.spouse && !h.spouse.dead) {
           var sp = h.spouse;
-          if (sp.resting || sp.state === 'rest') {
-            // Father's only job while she rests: gather & deliver food
-            h.state = 'home';
-            h.home = sp.home || h.home;
-            h.target = null; // updateHuman home logic handles forage + deliver
-            return;
-          }
-          // Claim a free house if they don't have a valid home yet (settle in — no baby yet)
-          var needsHome = !h.home || !isFamilyHouse(h.home) ||
-            (h.home.ownerIds && h.home.ownerIds.length &&
-             h.home.ownerIds.indexOf(h.id) < 0 && h.home.ownerIds.indexOf(sp.id) < 0 &&
-             houseOwnersAlive(h.home));
-          if (needsHome) {
-            var freeH = nearestFreeHouse(h);
-            if (freeH && Math.random() < 0.35) {
-              claimHouse(h, sp, freeH);
-              var settle = 90 + rand(0, 200);
-              h.babyReadyAt = Math.max(h.babyReadyAt || 0, h.age + settle);
-              sp.babyReadyAt = Math.max(sp.babyReadyAt || 0, sp.age + settle);
-              h.state = 'social';
-              h.target = freeH;
+          if (!h.home || !isFamilyHouse(h.home)) {
+            var freeH2 = nearestFreeHouse(h);
+            if (freeH2 && Math.random() < 0.35) {
+              claimHouse(h, sp, freeH2);
+              h.state = 'social'; h.target = freeH2;
               return;
             }
           }
-          // Baby attempt — couples with 0 kids try much harder (guaranteed eventually)
+          // Reproduce (after wood/build attempts)
           var needKid = (h.kids || 0) < 1 || (sp.kids || 0) < 1;
           var ready = needKid
             ? (h.cool <= 0 && sp.cool <= 0)
             : ((!h.babyReadyAt || h.age >= h.babyReadyAt) && (!sp.babyReadyAt || sp.age >= sp.babyReadyAt));
-          var tryChance = needKid ? 0.65 : 0.18;
+          var tryChance = needKid ? 0.45 : 0.2;
           if (ready && h.cool <= 0 && sp.cool <= 0 && h.energy >= 35 && sp.energy >= 35 &&
-              (h.kids || 0) < MAX_KIDS && !sp.carrying && Math.random() < tryChance) {
+              (h.kids || 0) < MAX_KIDS && !sp.carrying && !sp.resting && Math.random() < tryChance) {
             var famHouse = h.home || sp.home;
-            if (famHouse && isFamilyHouse(famHouse) &&
-                (!famHouse.ownerIds || !famHouse.ownerIds.length ||
-                 famHouse.ownerIds.indexOf(h.id) >= 0 || famHouse.ownerIds.indexOf(sp.id) >= 0)) {
+            if (famHouse && isFamilyHouse(famHouse)) {
               h.state = 'social';
               h.target = famHouse;
               h.mateTarget = sp;
-              if (!sp.resting && sp.state !== 'rest' && sp.state !== 'home') {
-                sp.state = 'social';
-                sp.target = famHouse;
-                sp.mateTarget = h;
-                sp.think = 10;
+              if (sp.state !== 'rest' && sp.state !== 'home') {
+                sp.state = 'social'; sp.target = famHouse; sp.mateTarget = h; sp.think = 10;
               }
               return;
             }
           }
-          // Stay near spouse sometimes
-          if (dist(h, sp) > 55 && Math.random() < 0.4) {
-            h.state = 'social';
-            h.target = sp;
-            h.mateTarget = sp;
-            return;
-          }
         }
 
-        // 3b) Singles: bond only if a FREE house exists (1 couple per house)
-        if (!h.spouse && h.age >= REPRO_AGE && Math.random() < 0.25 &&
-            h.energy >= 35 && !h.carrying) {
+        if (!h.spouse && h.age >= REPRO_AGE && Math.random() < 0.18 && h.energy >= 35) {
           var freeHouse = nearestFreeHouse(h);
           if (freeHouse) {
             var partner = nearest(humans, h, function (o) {
               return o !== h && !o.dead && o.gender !== h.gender &&
                 o.age >= REPRO_AGE && o.energy >= 35 &&
                 !o.resting && !o.carrying && !o.carriedBy &&
-                (!o.spouse || o.spouse.dead) &&
-                !areKin(h, o);
+                (!o.spouse || o.spouse.dead) && !areKin(h, o);
             });
             if (partner) {
               formCouple(h, partner);
               claimHouse(h, partner, freeHouse);
-              // Settling delay already set in formCouple — do NOT reproduce immediately
-              h.state = 'social';
-              h.target = freeHouse;
-              partner.state = 'social';
-              partner.target = freeHouse;
-              partner.mateTarget = h;
-              partner.think = 10;
+              h.state = 'social'; h.target = freeHouse;
+              partner.state = 'social'; partner.target = freeHouse;
+              partner.mateTarget = h; partner.think = 10;
               return;
             }
           }
         }
 
-        // 4) Mild hunger — forage / use farms
-        if (h.hunger > 18) {
-          h.state = 'forage';
-          var farm2 = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.3; });
-          if (farm2) h.target = farm2;
-          else {
-            h.target = nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
-                       nearest(trees, h, function (t) { return t.fruit > 0.3; });
+        // Again prefer chop before idle activities
+        if (woodAmt < WOOD_STOCK && tryChopWood(h)) return;
+
+        // Hospital / tools
+        if (h.hospitalWorker && Math.random() < 0.15) {
+          var hosp = getHospital();
+          if (hosp) {
+            h.state = 'wander';
+            h.wanderTo = { x: hosp.x + rand(-30, 30), y: hosp.y + rand(-30, 30) };
+            return;
           }
-          if (!h.target) { h.state = 'wander'; h.wanderTo = pickWanderPoint(h); }
-          return;
+        }
+        if (colony && colony.formed && !h.hospitalWorker && Math.random() < 0.08) {
+          if (tryJoinHospital(h)) return;
+        }
+        if (!h.tool && colony && colony.formed && woodAmt >= 3 && Math.random() < 0.12) {
+          var shop = nearest(buildings, h, function (b) { return b.type === 'workshop'; });
+          if (shop) { h.state = 'craft'; h.target = shop; return; }
         }
 
-        // 5) Start build sometimes
-        if (h.wood >= WOOD_FOR_HOUSE && Math.random() < 0.4) {
-          if (startBuilding(h)) return;
+        // Farm work
+        if (Math.random() < 0.25) {
+          var myFarm = nearest(buildings, h, function (b) { return b.type === 'farm'; });
+          if (myFarm) { h.state = 'farm'; h.target = myFarm; return; }
         }
 
-        // 6) Social / trade groups
-        if (Math.random() < 0.28) {
+        // Social trade
+        if (Math.random() < 0.2) {
           var buddy = nearest(humans, h, function (o) {
             return o !== h && !o.dead && dist(h, o) < 180;
           });
-          if (buddy) {
-            h.state = 'social';
-            h.target = buddy;
-            return;
-          }
+          if (buddy) { h.state = 'social'; h.target = buddy; return; }
         }
 
-        // 5) Farm work whenever farms exist (before or after village)
-        if (h.intel > 28 && Math.random() < 0.32) {
-          var myFarm = nearest(buildings, h, function (b) { return b.type === 'farm'; });
-          if (myFarm) {
-            h.state = 'farm';
-            h.target = myFarm;
-            return;
-          }
-        }
+        // Keep chopping if still under stock
+        if (woodAmt < WOOD_STOCK && tryChopWood(h)) return;
 
-        // 6) Sometimes chop — not always (wander is default)
-        if (h.wood < WOOD_FOR_HOUSE && Math.random() < 0.4) {
-          var tree = nearest(trees, h, function (t) { return t.wood > 0.5 && t.size > 0.4; });
-          if (tree) {
-            h.state = 'chop';
-            h.target = tree;
-            return;
-          }
-        }
-
-        // 7) Default: wander
         h.state = 'wander';
         h.target = null;
         h.wanderTo = pickWanderPoint(h);
@@ -5411,6 +5836,18 @@
         h.stateTime += dt;
         if (h.cool > 0) h.cool -= dt;
         if (h.tradeCool > 0) h.tradeCool -= dt;
+
+        // Hospital nursery care
+        if (h.inNursery) {
+          h.age += 0; // age already incremented at top
+          if (h.age >= MATURE_AGE) {
+            h.inNursery = false;
+            h.state = 'wander';
+            h.think = 2;
+          }
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) { markDying(h); return; }
+          return;
+        }
 
         // Carried babies: stay with mother (or adoptive mother)
         if (h.carriedBy) {
@@ -5431,13 +5868,17 @@
             h.energy = Math.min(100, h.energy + 0.001 * dt);
             if (h.age >= MATURE_AGE) releaseChild(mom, h);
           }
-          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) { h.dead = true; return; }
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) { markDying(h); return; }
           return;
         }
 
-        // Resting mother in house with baby — hunger 2x normal; can starve at 50
+        // Resting mother — if hospital daycare opens, drop kids and go to work
         if (h.resting || h.state === 'rest') {
-          h.hunger += 0.007 * dt; // 2x normal (0.0035) — depends on father bringing food
+          if (canUseDaycare() && (h.carrying || (h.carryingList && h.carryingList.length))) {
+            dropBabiesAtHospital(h);
+            return;
+          }
+          h.hunger += 0.007 * dt; // 2x normal — depends on father bringing food
           h.energy = Math.min(100, h.energy + 0.0005 * dt);
           // Eat from own stock if any (delivered by father)
           if (h.food > 0 && h.hunger > 10) {
@@ -5445,27 +5886,7 @@
             h.hunger = Math.max(0, h.hunger - 0.045 * dt);
           }
           if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
-            // Mother died while raising — try to find adoptive mothers for each child
-            var orphans = [];
-            if (h.carryingList && h.carryingList.length) {
-              orphans = h.carryingList.slice();
-            } else if (h.carrying) {
-              orphans = [h.carrying];
-            }
-            h.carrying = null;
-            h.carryingList = null;
-            if (h.spouse && !h.spouse.dead) {
-              h.spouse.state = 'wander';
-              h.spouse.think = 2;
-            }
-            clearSpouse(h);
-            h.dead = true;
-            orphans.forEach(function (c) {
-              if (c && !c.dead && c.age < MATURE_AGE) {
-                c.carriedBy = null;
-                adoptOrphan(c);
-              }
-            });
+            markDying(h);
             return;
           }
           // Stay at house
@@ -5503,92 +5924,94 @@
           return;
         }
 
-        // Father: when wife is resting, priority = get food and bring it to her
-        if (h.state === 'home' || (h.spouse && !h.spouse.dead && (h.spouse.resting || h.spouse.state === 'rest'))) {
-          h.hunger += 0.0035 * dt;
-          h.energy -= 0.0005 * dt;
-          if (h.spouse && h.spouse.dead) {
-            clearSpouse(h);
-            h.state = 'wander'; h.think = 2; h.target = null;
-            return;
-          }
-          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
-            h.dead = true; clearSpouse(h); return;
-          }
-          // Wife no longer resting → normal life
-          if (h.spouse && !h.spouse.resting && h.spouse.state !== 'rest') {
-            h.state = 'wander';
-            h.think = 3;
-            h.target = null;
-            return;
-          }
-
+        // Father only brings food when resting wife reaches hunger 30+
+        if (h.spouse && !h.spouse.dead && (h.spouse.resting || h.spouse.state === 'rest')) {
           var wife = h.spouse;
-          h.state = 'home';
+          if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
+            markDying(h); return;
+          }
+          // Wife not hungry enough — father works normally (don't force food runs)
+          if ((wife.hunger || 0) < 30) {
+            if (h.state === 'home') {
+              h.state = 'wander';
+              h.think = 2;
+              h.target = null;
+            }
+            // fall through to normal update below
+          } else {
+            // Wife hunger >= 30 — gather & deliver food
+            h.hunger += 0.0035 * dt;
+            h.energy -= 0.0005 * dt;
+            h.state = 'home';
 
-          // If carrying food, deliver to mother
-          if (h.food >= 0.8) {
-            var wdx = wife.x - h.x, wdy = wife.y - h.y;
-            var wd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
-            if (wd > 16) {
-              var fspd = 16 + h.intel * 0.08;
-              h.x += (wdx / wd) * fspd * dt;
-              h.y += (wdy / wd) * fspd * dt;
+            if (h.food >= 0.8) {
+              var wdx = wife.x - h.x, wdy = wife.y - h.y;
+              var wd = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+              if (wd > 16) {
+                var fspd = 16 + h.intel * 0.08;
+                h.x += (wdx / wd) * fspd * dt;
+                h.y += (wdy / wd) * fspd * dt;
+              } else {
+                var give = Math.min(h.food, 2.5 * dt);
+                h.food -= give;
+                wife.food = (wife.food || 0) + give;
+                wife.hunger = Math.max(0, wife.hunger - give * 1.2);
+              }
+              return;
+            }
+
+            var foodSrc = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.4; }) ||
+              nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
+              nearest(trees, h, function (t) { return t.fruit > 0.3; });
+            if (foodSrc) {
+              var sdx = foodSrc.x - h.x, sdy = foodSrc.y - h.y;
+              var sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+              var gspd = 16 + h.intel * 0.08;
+              if (sd > 16) {
+                h.x += (sdx / sd) * gspd * dt;
+                h.y += (sdy / sd) * gspd * dt;
+              } else {
+                if (foodSrc.type === 'farm' && (foodSrc.food || 0) > 0) {
+                  foodSrc.food -= 0.04 * dt;
+                  h.food += 0.035 * dt;
+                } else if (foodSrc.fruit !== undefined && foodSrc.fruit > 0) {
+                  foodSrc.fruit -= 0.035 * dt;
+                  h.food += 0.03 * dt;
+                } else if (foodSrc.food !== undefined && foodSrc.type === undefined) {
+                  foodSrc.food -= 0.04 * dt;
+                  h.food += 0.035 * dt;
+                }
+              }
             } else {
-              // Transfer food to mother
-              var give = Math.min(h.food, 2.5 * dt);
-              h.food -= give;
-              wife.food = (wife.food || 0) + give;
-              wife.hunger = Math.max(0, wife.hunger - give * 1.2);
+              var homePos = h.home || wife.home || nearestHouse(h);
+              if (homePos) {
+                h.home = homePos;
+                var hd2 = dist(h, homePos);
+                if (hd2 > 20) {
+                  var dx2 = homePos.x - h.x, dy2 = homePos.y - h.y, d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+                  h.x += (dx2 / d2) * 12 * dt;
+                  h.y += (dy2 / d2) * 12 * dt;
+                }
+              }
             }
             return;
           }
-
-          // Need food — forage farm / plants / fruit (priority over staying idle at house)
-          var foodSrc = nearest(buildings, h, function (b) { return b.type === 'farm' && (b.food || 0) > 0.4; }) ||
-            nearest(plants, h, function (p) { return p.stage > 0.4 && p.food > 0.2; }) ||
-            nearest(trees, h, function (t) { return t.fruit > 0.3; });
-          if (foodSrc) {
-            var sdx = foodSrc.x - h.x, sdy = foodSrc.y - h.y;
-            var sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
-            var gspd = 16 + h.intel * 0.08;
-            if (sd > 16) {
-              h.x += (sdx / sd) * gspd * dt;
-              h.y += (sdy / sd) * gspd * dt;
-            } else {
-              if (foodSrc.type === 'farm' && (foodSrc.food || 0) > 0) {
-                foodSrc.food -= 0.04 * dt;
-                h.food += 0.035 * dt;
-              } else if (foodSrc.fruit !== undefined && foodSrc.fruit > 0) {
-                foodSrc.fruit -= 0.035 * dt;
-                h.food += 0.03 * dt;
-              } else if (foodSrc.food !== undefined && foodSrc.type === undefined) {
-                foodSrc.food -= 0.04 * dt;
-                h.food += 0.035 * dt;
-              }
-            }
-          } else {
-            // No food source — go near wife / house and wait briefly
-            var homePos = h.home || wife.home || nearestHouse(h);
-            if (homePos) {
-              h.home = homePos;
-              var hd2 = dist(h, homePos);
-              if (hd2 > 20) {
-                var dx2 = homePos.x - h.x, dy2 = homePos.y - h.y, d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
-                h.x += (dx2 / d2) * 12 * dt;
-                h.y += (dy2 / d2) * 12 * dt;
-              }
-            }
-          }
-          return;
+        } else if (h.state === 'home') {
+          // No resting wife — leave home mode
+          h.state = 'wander';
+          h.think = 2;
+          h.target = null;
         }
 
         h.hunger += 0.0035 * dt; // rises fast — need farms/food
         h.energy -= 0.0005 * dt;
         if (h.hunger >= 40) h.energy -= 0.001 * dt;
         if (h.hunger >= HUNGER_DEATH || h.energy <= 0 || h.age > h.maxAge) {
-          clearSpouse(h);
-          h.dead = true;
+          markDying(h);
+          return;
+        }
+        if (h.dying) {
+          h.energy = Math.max(0.2, h.energy - 0.0002 * dt);
           return;
         }
 
@@ -5613,7 +6036,9 @@
 
         clearInvalidTarget(h);
 
-        if (h.think <= 0 || (!h.target && h.state !== 'wander' && h.state !== 'eat' && h.state !== 'build' && h.state !== 'rest')) {
+        if (h.state === 'rescue' || h.state === 'dying' || h.dying) {
+          // keep rescue duty
+        } else if (h.think <= 0 || (!h.target && h.state !== 'wander' && h.state !== 'eat' && h.state !== 'build' && h.state !== 'rest' && h.state !== 'craft')) {
           decide(h);
         }
         h.think -= dt;
@@ -5624,6 +6049,55 @@
           h.hunger = Math.max(0, h.hunger - 0.02 * dt);
           h.energy = Math.min(100, h.energy + 0.012 * dt);
           if (h.hunger < 18) { h.state = 'wander'; h.think = 0; }
+          return;
+        }
+
+        // Rescue mission (doesn't need dest path)
+        if (h.state === 'rescue' && h.rescueTarget) {
+          var patient = h.rescueTarget;
+          if (!patient || patient.dead || (!patient.dying && patient.state !== 'dying')) {
+            h.rescueTarget = null; h.state = 'wander'; h.think = 3;
+          } else {
+            var hosp = getHospital();
+            if (!patient._rescued) {
+              var pdx = patient.x - h.x, pdy = patient.y - h.y;
+              var pd = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
+              if (pd > 18) {
+                h.x += (pdx / pd) * 14 * dt;
+                h.y += (pdy / pd) * 14 * dt;
+              } else {
+                patient._rescued = true;
+              }
+            } else if (hosp) {
+              patient.x = h.x; patient.y = h.y;
+              var hdx = hosp.x - h.x, hdy = hosp.y - h.y;
+              var hd = Math.sqrt(hdx * hdx + hdy * hdy) || 1;
+              if (hd > 20) {
+                h.x += (hdx / hd) * 12 * dt;
+                h.y += (hdy / hd) * 12 * dt;
+                patient.x = h.x; patient.y = h.y;
+              } else {
+                if (patient.dying) tryReviveAtHospital(patient);
+                patient._rescued = false;
+                h.rescueTarget = null;
+                h.state = 'wander';
+                h.think = 5;
+              }
+            } else {
+              finalizeDeath(patient);
+              h.rescueTarget = null; h.state = 'wander';
+            }
+          }
+          return;
+        }
+        if (h.state === 'craft') {
+          if (craftTool(h)) { h.state = 'wander'; h.think = 4; return; }
+          var shop2 = nearest(buildings, h, function (b) { return b.type === 'workshop'; });
+          if (shop2) {
+            var sdx2 = shop2.x - h.x, sdy2 = shop2.y - h.y, sd2 = Math.sqrt(sdx2*sdx2+sdy2*sdy2)||1;
+            if (sd2 > 20) { h.x += (sdx2/sd2)*14*dt; h.y += (sdy2/sd2)*14*dt; }
+            else if (h.wood < 3) { h.state = 'wander'; h.think = 3; }
+          } else { h.state = 'wander'; h.think = 3; }
           return;
         }
 
@@ -5667,18 +6141,70 @@
                 h.target = null; h.think = 0;
               }
             } else if (h.state === 'farm' && h.target && h.target.type === 'farm') {
-              h.target.food = Math.min(12, (h.target.food || 0) + 0.02 * dt);
-              h.food += 0.004 * dt;
+              var farmMul = h.tool === 'pickaxe' ? 1.5 : 1;
+              h.target.food = Math.min(16, (h.target.food || 0) + 0.02 * farmMul * dt);
+              h.food += 0.004 * farmMul * dt;
               if (Math.random() < 0.002 * dt) { h.target = null; h.think = 0; }
             } else if (h.state === 'chop' && h.target && (h.target.wood || 0) > 0) {
-              h.target.wood -= 0.01 * dt;
-              h.wood += 0.009 * dt;
+              var chopMul = 1;
+              if (h.tool === 'pickaxe') chopMul = 2.2;
+              else if (h.tool === 'axe') chopMul = 1.8;
+              else if (h.tool === 'spear') chopMul = 1.15;
+              h.target.wood -= 0.018 * chopMul * dt;
+              h.wood += 0.016 * chopMul * dt;
               if (h.target.wood <= 0) {
                 h.target = null;
                 h.state = 'wander';
                 h.think = 3 + rand(0, 5);
               }
-              // Don't auto-build here — wait for next decide() with probability
+            } else if (h.state === 'rescue' && h.rescueTarget) {
+              var patient = h.rescueTarget;
+              if (!patient || patient.dead || (!patient.dying && patient.state !== 'dying')) {
+                h.rescueTarget = null; h.state = 'wander'; h.think = 3;
+              } else {
+                var hosp = getHospital();
+                // Phase 1: go to patient
+                if (!patient._rescued) {
+                  var pdx = patient.x - h.x, pdy = patient.y - h.y;
+                  var pd = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
+                  if (pd > 18) {
+                    h.x += (pdx / pd) * 14 * dt;
+                    h.y += (pdy / pd) * 14 * dt;
+                  } else {
+                    patient._rescued = true;
+                    patient.x = h.x; patient.y = h.y;
+                  }
+                } else if (hosp) {
+                  // Phase 2: carry to hospital
+                  patient.x = h.x; patient.y = h.y;
+                  var hdx = hosp.x - h.x, hdy = hosp.y - h.y;
+                  var hd = Math.sqrt(hdx * hdx + hdy * hdy) || 1;
+                  if (hd > 20) {
+                    h.x += (hdx / hd) * 12 * dt;
+                    h.y += (hdy / hd) * 12 * dt;
+                  } else {
+                    // Arrived — attempt revive (only once, by first worker)
+                    if (patient.dying) tryReviveAtHospital(patient);
+                    patient._rescued = false;
+                    h.rescueTarget = null;
+                    h.state = 'wander';
+                    h.think = 5;
+                  }
+                } else {
+                  finalizeDeath(patient);
+                  h.rescueTarget = null; h.state = 'wander';
+                }
+              }
+            } else if (h.state === 'craft') {
+              if (craftTool(h)) { h.state = 'wander'; h.think = 4; }
+              else {
+                var shop = nearest(buildings, h, function (b) { return b.type === 'workshop'; });
+                if (shop) {
+                  var sdx = shop.x - h.x, sdy = shop.y - h.y, sd = Math.sqrt(sdx*sdx+sdy*sdy)||1;
+                  if (sd > 20) { h.x += (sdx/sd)*14*dt; h.y += (sdy/sd)*14*dt; }
+                  else if (h.wood < 3) { h.state = 'wander'; h.think = 3; }
+                } else { h.state = 'wander'; h.think = 3; }
+              }
             } else if (h.state === 'build' && h.buildSite) {
               if (d < 18) {
                 h.buildProgress = (h.buildProgress || 0) + dt;
@@ -5727,7 +6253,7 @@
           t.size = Math.min(1.35, t.size + 0.000035 * dt);
           if (t.size > 0.55) {
             t.fruit = Math.min(5, t.fruit + 0.00012 * dt);
-            t.wood = Math.min(9, t.wood + 0.00008 * dt);
+            t.wood = Math.min(14, t.wood + 0.00018 * dt);
           }
         });
         // Trees cannot exist on buildings — continuously clear
@@ -5742,6 +6268,29 @@
         // Farms grow food as soon as they exist (pre-village agriculture)
         buildings.forEach(function (b) {
           if (b.type === 'farm') b.food = Math.min(16, (b.food || 0) + 0.008 * dt);
+          if (b.type === 'well') {
+            humans.forEach(function (hm) {
+              if (!hm.dead && !hm.dying && dist(hm, b) < 36) {
+                hm.hunger = Math.max(0, hm.hunger - 0.004 * dt);
+                hm.energy = Math.min(100, hm.energy + 0.002 * dt);
+              }
+            });
+          }
+          if (b.type === 'school') {
+            humans.forEach(function (hm) {
+              if (!hm.dead && !hm.dying && dist(hm, b) < 50) {
+                hm.intel = Math.min(100, hm.intel + 0.0008 * dt);
+              }
+            });
+          }
+          if (b.type === 'mine') {
+            // passive ore->wood-like resource trickle for nearby tool users
+            humans.forEach(function (hm) {
+              if (!hm.dead && hm.tool === 'pickaxe' && dist(hm, b) < 40 && Math.random() < 0.002 * dt) {
+                hm.wood += 0.15;
+              }
+            });
+          }
         });
         // New plants only in clear areas
         if (Math.random() < 0.0005 * dt && plants.length < 50) {
@@ -5750,7 +6299,7 @@
           if (!blocked) plants.push({ x: px, y: py, stage: 0.1, food: 0.2 });
         }
         // New tree regrowth only off buildings
-        if (Math.random() < 0.00015 * dt && trees.length < 22) {
+        if (Math.random() < 0.00045 * dt && trees.length < 40) {
           var tx = rand(40, W - 40), ty = rand(40, H - 40);
           if (!siteBlocked(tx, ty)) {
             trees.push({ x: tx, y: ty, size: 0.2, fruit: 0, wood: 1.5, age: 0 });
@@ -5758,8 +6307,10 @@
         }
 
         humans.forEach(function (h) { updateHuman(h, dt); });
+        updateNursery(dt);
+        updateCapitolConstruction(dt);
         checkColonyFromBuilders();
-        humans = humans.filter(function (h) { return !h.dead; });
+        humans = humans.filter(function (h) { return !h.dead; }); // dying stay until rescue resolves
         if (colony) {
           colony.members = colony.members.filter(function (id) {
             return humans.some(function (h) { return h.id === id; });
@@ -5787,17 +6338,30 @@
 
       function drawBuilding(b) {
         if (b.type === 'capitol') {
-          ctx.fillStyle = '#6a4c9c';
-          ctx.fillRect(b.x - 18, b.y - 14, 36, 28);
-          ctx.fillStyle = '#c9a227';
-          ctx.beginPath();
-          ctx.moveTo(b.x - 20, b.y - 14);
-          ctx.lineTo(b.x, b.y - 32);
-          ctx.lineTo(b.x + 20, b.y - 14);
-          ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.font = '10px Inter,sans-serif';
-          ctx.fillText('CAPITOL', b.x - 22, b.y + 28);
+          if (b.constructing) {
+            var cpr = Math.min(1, (b.progress || 0) / (b.buildTime || CAPITOL_BUILD_TIME));
+            ctx.fillStyle = '#4a3a5c';
+            ctx.fillRect(b.x - 18, b.y - 14, 36, 28 * cpr);
+            ctx.strokeStyle = '#c9a227';
+            ctx.strokeRect(b.x - 18, b.y - 14, 36, 28);
+            ctx.fillStyle = '#ffd54f';
+            ctx.fillRect(b.x - 16, b.y + 16, 32 * cpr, 4);
+            ctx.fillStyle = '#fff';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('CAPITOL ' + Math.floor(cpr * 100) + '%', b.x - 28, b.y + 32);
+          } else {
+            ctx.fillStyle = '#6a4c9c';
+            ctx.fillRect(b.x - 18, b.y - 14, 36, 28);
+            ctx.fillStyle = '#c9a227';
+            ctx.beginPath();
+            ctx.moveTo(b.x - 20, b.y - 14);
+            ctx.lineTo(b.x, b.y - 32);
+            ctx.lineTo(b.x + 20, b.y - 14);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Inter,sans-serif';
+            ctx.fillText('CAPITOL', b.x - 22, b.y + 28);
+          }
         } else if (b.type === 'farm') {
           ctx.fillStyle = '#8d6e3f';
           ctx.fillRect(b.x - 16, b.y - 8, 32, 16);
@@ -5824,6 +6388,47 @@
           ctx.fillStyle = '#b0bec5';
           ctx.font = '9px Inter,sans-serif';
           ctx.fillText('SHOP', b.x - 14, b.y + 22);
+        } else if (b.type === 'hospital') {
+          ctx.fillStyle = '#eceff1';
+          ctx.fillRect(b.x - 18, b.y - 14, 36, 28);
+          ctx.fillStyle = '#e53935';
+          ctx.fillRect(b.x - 3, b.y - 10, 6, 20);
+          ctx.fillRect(b.x - 10, b.y - 3, 20, 6);
+          ctx.fillStyle = '#c62828';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('HOSPITAL', b.x - 26, b.y + 28);
+        } else if (b.type === 'school') {
+          ctx.fillStyle = '#1565c0';
+          ctx.fillRect(b.x - 16, b.y - 12, 32, 24);
+          ctx.fillStyle = '#fff';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('SCHOOL', b.x - 20, b.y + 22);
+        } else if (b.type === 'market') {
+          ctx.fillStyle = '#ef6c00';
+          ctx.fillRect(b.x - 16, b.y - 10, 32, 20);
+          ctx.fillStyle = '#ffe0b2';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('MARKET', b.x - 20, b.y + 22);
+        } else if (b.type === 'well') {
+          ctx.fillStyle = '#546e7a';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#4fc3f7';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#b0bec5';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('WELL', b.x - 12, b.y + 24);
+        } else if (b.type === 'mine') {
+          ctx.fillStyle = '#37474f';
+          ctx.fillRect(b.x - 14, b.y - 8, 28, 18);
+          ctx.fillStyle = '#90a4ae';
+          ctx.fillRect(b.x - 6, b.y - 4, 12, 10);
+          ctx.fillStyle = '#cfd8dc';
+          ctx.font = '9px Inter,sans-serif';
+          ctx.fillText('MINE', b.x - 14, b.y + 22);
         } else {
           ctx.fillStyle = '#5a3a22';
           ctx.fillRect(b.x - 14, b.y - 10, 28, 20);
@@ -5903,6 +6508,13 @@
         });
 
         humans.forEach(function (h) {
+          if (h.inNursery) {
+            ctx.fillStyle = h.color || '#fc8';
+            ctx.beginPath();
+            ctx.arc(h.x, h.y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+          }
           if (h.carriedBy) {
             // Small baby next to mother
             ctx.fillStyle = h.color;
@@ -5932,10 +6544,38 @@
             ctx.font = '9px Inter,sans-serif';
             ctx.fillText('REST', h.x - 12, h.y - 22);
           }
+          if (h.dying) {
+            ctx.fillStyle = 'rgba(229,57,53,0.4)';
+            ctx.beginPath();
+            ctx.arc(h.x, h.y - 4, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef5350';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('DOWN', h.x - 14, h.y - 22);
+          }
           if (h.state === 'home') {
             ctx.fillStyle = '#90caf9';
             ctx.font = '9px Inter,sans-serif';
             ctx.fillText('HOME', h.x - 14, h.y - 22);
+          }
+          if (h.state === 'rescue') {
+            ctx.fillStyle = '#ef5350';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('RESCUE', h.x - 18, h.y - 22);
+          }
+          if (h.capitolBuilder || h.state === 'capitol_build') {
+            ctx.fillStyle = '#ce93d8';
+            ctx.font = '9px Inter,sans-serif';
+            ctx.fillText('CAPITOL', h.x - 18, h.y - 22);
+          }
+          if (h.tool) {
+            ctx.fillStyle = '#ffd54f';
+            ctx.font = '8px Inter,sans-serif';
+            ctx.fillText(h.tool === 'pickaxe' ? '⛏' : (h.tool === 'axe' ? '🪓' : '⚔'), h.x + 8, h.y - 6);
+          }
+          if (h.hospitalWorker) {
+            ctx.fillStyle = '#e53935';
+            ctx.fillRect(h.x - 8, h.y + 10, 16, 3);
           }
           // Marriage ring mark
           if (h.spouse && !h.spouse.dead) {
@@ -5985,7 +6625,7 @@
           ctx.fillText('IQ ' + Math.round(selected.intel) + '  Energy ' + Math.round(selected.energy), 16, 42);
           ctx.fillText('Hunger ' + Math.round(selected.hunger) + '  Age ' + Math.floor(selected.age / 60) + 'm', 16, 60);
           ctx.fillText('Life ~' + mins + 'm ' + secs + 's  ·  ' + selected.state + (bp ? ' ' + bp + '%' : ''), 16, 78);
-          ctx.fillText('Wood ' + selected.wood.toFixed(1) + ' / ' + WOOD_FOR_HOUSE + '  Food ' + selected.food.toFixed(1), 16, 96);
+          ctx.fillText('Wood ' + selected.wood.toFixed(1) + ' / ' + WOOD_FOR_HOUSE + '  Food ' + selected.food.toFixed(1) + (selected.tool ? '  ' + selected.tool : '') + (selected.hospitalWorker ? '  MD' : ''), 16, 96);
         }
       }
 
