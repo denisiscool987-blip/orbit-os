@@ -4603,7 +4603,7 @@
       var REPRO_AGE = 1200; // 20 min — can reproduce
       var REPRO_COOL = 1200; // 20 min child/birth cooldown
       var MAX_KIDS = 6;
-      var WOOD_FOR_HOUSE = 5; // house & farm
+      var WOOD_FOR_HOUSE = 5; // all buildings cost 5 wood
       var WOOD_STOCK = 80;
       var SETTLE_HOUSES = 3;
       var SETTLE_FARMS = 2;
@@ -4614,6 +4614,8 @@
       var REVIVE_CHANCE = 0.30;
       var REVIVE_TIME = 240; // ~2 in-game days to finish a successful revive
       var pendingRescue = []; // dying humans awaiting hospital pickup
+      var treePlantAccum = 0; // ~5 new trees per in-game day
+      var MAX_POP = 60; // soft cap to prevent freeze from runaway pop
       var BUILD_CLEAR = 38;
       var BUILD_TIME = 360; // ~3 in-game days for normal buildings
       var CAPITOL_BUILD_TIME = 720; // ~6 in-game days for capitol
@@ -4663,7 +4665,7 @@
 
       function seedWorld() {
         humans = []; plants = []; trees = []; buildings = [];
-        day = 0; maxGen = 0; nextId = 1; selected = null; colony = null; pendingRescue = [];
+        day = 0; maxGen = 0; nextId = 1; selected = null; colony = null; pendingRescue = []; treePlantAccum = 0;
         for (var i = 0; i < 18; i++) {
           trees.push({
             x: rand(40, W - 40), y: rand(40, H - 40),
@@ -4889,6 +4891,7 @@
 
       function tryReproduce(a, b) {
         if (!a || !b || a.dead || b.dead) return false;
+        if (humans.length >= MAX_POP) return false;
         if (a.resting || b.resting) return false;
         if (a.carrying || b.carrying) return false;
         if (a.carriedBy || b.carriedBy) return false;
@@ -5253,10 +5256,7 @@
       }
 
       function buildCost(type) {
-        if (type === 'house' || type === 'farm') return WOOD_FOR_HOUSE; // 5
-        if (type === 'well') return 8;
-        // hospital, workshop, storage, school, market, mine, capitol
-        return 10;
+        return WOOD_FOR_HOUSE; // all buildings cost 5 wood
       }
 
       function getHospital() {
@@ -6433,44 +6433,55 @@
             return true;
           });
         }
-        // Farms grow food as soon as they exist (pre-village agriculture)
-        buildings.forEach(function (b) {
-          if (b.type === 'farm') b.food = Math.min(16, (b.food || 0) + 0.008 * dt);
-          if (b.type === 'well') {
-            humans.forEach(function (hm) {
-              if (!hm.dead && !hm.dying && dist(hm, b) < 36) {
-                hm.hunger = Math.max(0, hm.hunger - 0.004 * dt);
-                hm.energy = Math.min(100, hm.energy + 0.002 * dt);
-              }
-            });
+        // Building effects (kept light to avoid frame freezes)
+        var hi, bi, bld, hm;
+        for (bi = 0; bi < buildings.length; bi++) {
+          bld = buildings[bi];
+          if (bld.type === 'farm') {
+            bld.food = Math.min(20, (bld.food || 0) + 0.008 * dt);
+            continue;
           }
-          if (b.type === 'school') {
-            humans.forEach(function (hm) {
-              if (!hm.dead && !hm.dying && dist(hm, b) < 50) {
-                hm.intel = Math.min(100, hm.intel + 0.0008 * dt);
-              }
-            });
+          if (bld.type === 'storage') continue;
+          if (bld.constructing) continue;
+          for (hi = 0; hi < humans.length; hi++) {
+            hm = humans[hi];
+            if (hm.dead || hm.dying) continue;
+            var dHB = dist(hm, bld);
+            if (bld.type === 'well' && dHB < 40) {
+              hm.hunger = Math.max(0, hm.hunger - 0.006 * dt);
+              hm.energy = Math.min(100, hm.energy + 0.003 * dt);
+            } else if (bld.type === 'school' && dHB < 55) {
+              hm.intel = Math.min(100, hm.intel + 0.0012 * dt);
+            } else if (bld.type === 'mine' && dHB < 42) {
+              hm.wood += (hm.tool === 'pickaxe' ? 0.04 : 0.012) * dt;
+            } else if (bld.type === 'capitol' && dHB < 90) {
+              hm.energy = Math.min(100, hm.energy + 0.002 * dt);
+              hm.intel = Math.min(100, hm.intel + 0.0003 * dt);
+            } else if (bld.type === 'house' && hm.home === bld && dHB < 28) {
+              hm.energy = Math.min(100, hm.energy + 0.0015 * dt);
+            }
           }
-          if (b.type === 'mine') {
-            // passive ore->wood-like resource trickle for nearby tool users
-            humans.forEach(function (hm) {
-              if (!hm.dead && hm.tool === 'pickaxe' && dist(hm, b) < 40 && Math.random() < 0.002 * dt) {
-                hm.wood += 0.15;
-              }
-            });
-          }
-        });
+        }
         // New plants only in clear areas
         if (Math.random() < 0.0005 * dt && plants.length < 50) {
           var px = rand(30, W - 30), py = rand(30, H - 30);
           var blocked = buildings.some(function (b) { return dist(b, { x: px, y: py }) < 28; });
           if (!blocked) plants.push({ x: px, y: py, stage: 0.1, food: 0.2 });
         }
-        // New tree regrowth only off buildings
-        if (Math.random() < 0.00045 * dt && trees.length < 40) {
-          var tx = rand(40, W - 40), ty = rand(40, H - 40);
-          if (!siteBlocked(tx, ty)) {
-            trees.push({ x: tx, y: ty, size: 0.2, fruit: 0, wood: 1.5, age: 0 });
+        // Natural tree growth: ~5 per in-game day (max 2 plant attempts per frame)
+        treePlantAccum += (5 / 120) * dt;
+        if (treePlantAccum > 5) treePlantAccum = 5; // never backlog huge plant storms
+        var plantsThisFrame = 0;
+        while (treePlantAccum >= 1 && trees.length < 45 && plantsThisFrame < 2) {
+          treePlantAccum -= 1;
+          plantsThisFrame++;
+          var planted = false;
+          for (var ttry = 0; ttry < 8 && !planted; ttry++) {
+            var tx = rand(40, W - 40), ty = rand(40, H - 40);
+            if (!siteBlocked(tx, ty)) {
+              trees.push({ x: tx, y: ty, size: 0.15 + rand(0, 0.15), fruit: 0, wood: 1.2 + rand(0, 1), age: 0 });
+              planted = true;
+            }
           }
         }
 
@@ -6478,7 +6489,18 @@
         updateNursery(dt);
         updateCapitolConstruction(dt);
         checkColonyFromBuilders();
-        humans = humans.filter(function (h) { return !h.dead; }); // dying stay until rescue resolves
+        humans = humans.filter(function (h) { return !h.dead; });
+        // Soft population cap — remove oldest non-essential if over limit
+        if (humans.length > MAX_POP) {
+          var extras = humans.slice().sort(function (a, b) { return b.age - a.age; });
+          while (humans.length > MAX_POP && extras.length) {
+            var oldH = extras.shift();
+            if (!oldH || oldH.capitolBuilder || oldH.hospitalWorker) continue;
+            oldH.dead = true;
+            finalizeDeath(oldH);
+            humans = humans.filter(function (h) { return h !== oldH && !h.dead; });
+          }
+        }
         if (colony) {
           colony.members = colony.members.filter(function (id) {
             return humans.some(function (h) { return h.id === id; });
@@ -6816,14 +6838,42 @@
 
       function loop(now) {
         if (win.closed) return;
-        var realDt = Math.min(0.1, (now - lastTs) / 1000);
-        lastTs = now;
-        if (running) updateWorld(realDt * speed);
-        draw();
+        try {
+          if (now == null || typeof now !== 'number' || isNaN(now)) now = performance.now();
+          if (document.hidden) {
+            lastTs = now;
+            requestAnimationFrame(loop);
+            return;
+          }
+          var raw = (now - lastTs) / 1000;
+          if (!(raw > 0) || raw > 0.2 || isNaN(raw)) raw = 1 / 60;
+          lastTs = now;
+          // Cap sim step so 16x speed never melts the main thread
+          var step = Math.min(0.04, raw) * Math.min(speed, 16);
+          if (running) updateWorld(step);
+          draw();
+        } catch (err) {
+          console.error('Genesis frame error', err);
+          // Keep the loop alive — auto-pause instead of permanent freeze
+          running = false;
+          lastTs = performance.now();
+          try {
+            var pb = win.el.querySelector('#gen-pause');
+            if (pb) pb.textContent = 'Resume';
+          } catch (e2) {}
+        }
         requestAnimationFrame(loop);
       }
 
+      // Resume cleanly when user returns to the tab
+      function onVis() {
+        if (!document.hidden) lastTs = performance.now();
+      }
+      document.addEventListener('visibilitychange', onVis);
+      window.addEventListener('focus', onVis);
+
       win.el.querySelector('#gen-spawn').addEventListener('click', function () {
+        if (humans.length >= MAX_POP) { showToast('Population cap (' + MAX_POP + ')'); return; }
         var h = spawnHuman(maxGen > 0 ? maxGen : 0, null);
         if (maxGen > 0) {
           h.gen = maxGen;
